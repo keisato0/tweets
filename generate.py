@@ -27,7 +27,7 @@ PAGE_SIZE = 100
 
 DISPLAY_NAME = "Kei Sato"
 HANDLE = "@keisato0"
-SITE_TITLE = "近況つぶやき"
+SITE_TITLE = "近況"
 
 
 def load_tweets():
@@ -104,7 +104,6 @@ PAGE_TEMPLATE = """<!DOCTYPE html>
 <div class="container">
   <header class="site-header">
     <h1>{site_title}</h1>
-    <p class="site-sub">{display_name} {handle}</p>
   </header>
   <main class="timeline">
 {tweets_html}  </main>
@@ -215,7 +214,6 @@ def main():
 <div class="container">
   <header class="site-header">
     <h1>{html.escape(SITE_TITLE)}</h1>
-    <p class="site-sub">{html.escape(DISPLAY_NAME)} {html.escape(HANDLE)}</p>
   </header>
   <main class="timeline">
 {index_tweets_html}  </main>
