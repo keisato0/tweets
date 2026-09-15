@@ -5,18 +5,10 @@
 ## 更新方法
 
 1. `tweet.txt` の末尾に、空行区切りで新しいつぶやきを追記する。
-2. 以下を実行してHTMLを再生成する。
+2. 以下を実行する(HTML再生成 + commit + push を一括で行う)。
 
    ```bash
-   python3 generate.py
-   ```
-
-3. 変更を commit / push する。
-
-   ```bash
-   git add -A
-   git commit -m "つぶやきを追加"
-   git push
+   ./post.sh
    ```
 
 新しく追加されたつぶやきには、生成スクリプトを実行した時刻が投稿日時として
