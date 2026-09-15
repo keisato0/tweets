@@ -27,7 +27,7 @@ PAGE_SIZE = 100
 
 DISPLAY_NAME = "Kei Sato"
 HANDLE = "@keisato0"
-SITE_TITLE = "近況"
+SITE_TITLE = "ツイッター"
 
 
 def load_tweets():
