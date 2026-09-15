@@ -70,29 +70,20 @@ body {
   height: 40px;
   min-width: 40px;
   border-radius: 50%;
-  background: var(--blue);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  font-size: 16px;
+  object-fit: cover;
 }
 
 .tweet-names {
   display: flex;
   flex-direction: column;
+  justify-content: center;
   line-height: 1.2;
 }
 
-.name {
+.handle {
   font-weight: bold;
   font-size: 15px;
-}
-
-.handle {
-  color: var(--sub);
-  font-size: 13px;
+  color: var(--text);
 }
 
 .tweet-body {

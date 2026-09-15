@@ -25,9 +25,9 @@ ARCHIVE_DIR = ROOT / "archive"
 TZ = ZoneInfo("Asia/Tokyo")
 PAGE_SIZE = 100
 
-DISPLAY_NAME = "Kei Sato"
 HANDLE = "@keisato0"
 SITE_TITLE = "ツイッター"
+ICON_FILENAME = "icon.jpg"
 
 
 def load_tweets():
@@ -75,14 +75,13 @@ def format_datetime(iso_str):
     return f"{dt.year}年{dt.month}月{dt.day}日 {dt.hour:02d}:{dt.minute:02d}"
 
 
-def render_tweet_html(text, iso_str):
+def render_tweet_html(text, iso_str, icon_path):
     body = html.escape(text).replace("\n", "<br>")
     date_label = format_datetime(iso_str)
     return f"""    <article class="tweet">
       <div class="tweet-header">
-        <div class="avatar">{html.escape(DISPLAY_NAME[:1])}</div>
+        <img class="avatar" src="{icon_path}" alt="">
         <div class="tweet-names">
-          <span class="name">{html.escape(DISPLAY_NAME)}</span>
           <span class="handle">{html.escape(HANDLE)}</span>
         </div>
       </div>
@@ -117,15 +116,14 @@ PAGE_TEMPLATE = """<!DOCTYPE html>
 """
 
 
-def build_page(tweets_with_ts, title, css_path, index_path, nav_html=""):
+def build_page(tweets_with_ts, title, css_path, icon_path, index_path, nav_html=""):
     tweets_html = "".join(
-        render_tweet_html(text, ts) for text, ts in tweets_with_ts
+        render_tweet_html(text, ts, icon_path) for text, ts in tweets_with_ts
     )
     return PAGE_TEMPLATE.format(
         title=html.escape(title),
         css_path=css_path,
         site_title=html.escape(SITE_TITLE),
-        display_name=html.escape(DISPLAY_NAME),
         handle=html.escape(HANDLE),
         tweets_html=tweets_html,
         nav_html=nav_html,
@@ -173,6 +171,7 @@ def main():
             page_tweets,
             title=f"{SITE_TITLE} ({first_no}〜{last_no}件目)",
             css_path="../style.css",
+            icon_path=f"../{ICON_FILENAME}",
             index_path="../index.html",
             nav_html=nav_html,
         )
@@ -200,7 +199,7 @@ def main():
         )
 
     index_tweets_html = "".join(
-        render_tweet_html(text, ts) for text, ts in latest
+        render_tweet_html(text, ts, ICON_FILENAME) for text, ts in latest
     )
     index_html = f"""<!DOCTYPE html>
 <html lang="ja">
