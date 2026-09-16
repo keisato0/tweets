@@ -92,15 +92,6 @@ body {
   white-space: pre-wrap;
   word-wrap: break-word;
   margin-bottom: 6px;
-  overflow: hidden;
-}
-
-.tweet-body::first-letter {
-  float: left;
-  font-size: 2em;
-  line-height: 0.9;
-  font-weight: 300;
-  padding-right: 0.06em;
 }
 
 .tweet-date {
