@@ -94,12 +94,13 @@ body {
   margin-bottom: 6px;
 }
 
-.hashtag {
+.tweet-body a {
   color: var(--blue);
   text-decoration: none;
+  word-break: break-all;
 }
 
-.hashtag:hover {
+.tweet-body a:hover {
   text-decoration: underline;
 }
 

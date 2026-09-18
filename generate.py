@@ -32,20 +32,35 @@ SITE_TITLE = "ツイッター"
 ICON_FILENAME = "icon.jpg"
 
 # ハッシュタグは "#" から次の半角スペース(または改行・文末)までとみなす
-HASHTAG_RE = re.compile(r"#([^ \n]+)")
+# URLは "http(s)://" から次の空白(改行含む)までとみなす
+LINK_RE = re.compile(r"https?://[^\s]+|#([^ \n]+)")
+
+# URLの末尾によく付着する句読点・記号は、リンクに含めず地の文として残す
+URL_TRAILING_PUNCT = "。、！？!?.,;:)）」』】"
 
 
-def linkify_hashtags(text):
-    parts = HASHTAG_RE.split(text)
+def linkify(text):
     out = []
-    for i, part in enumerate(parts):
-        if i % 2 == 0:
-            out.append(html.escape(part))
+    last = 0
+    for m in LINK_RE.finditer(text):
+        out.append(html.escape(text[last : m.start()]))
+        tag = m.group(1)
+        if tag is None:
+            url = m.group()
+            trimmed = url.rstrip(URL_TRAILING_PUNCT)
+            trailing = url[len(trimmed) :]
+            out.append(
+                f'<a href="{html.escape(trimmed, quote=True)}" '
+                f'target="_blank" rel="noopener noreferrer">{html.escape(trimmed)}</a>'
+                f"{html.escape(trailing)}"
+            )
         else:
             out.append(
-                f'<a class="hashtag" href="https://x.com/hashtag/{quote(part)}" '
-                f'target="_blank" rel="noopener noreferrer">#{html.escape(part)}</a>'
+                f'<a class="hashtag" href="https://x.com/hashtag/{quote(tag)}" '
+                f'target="_blank" rel="noopener noreferrer">#{html.escape(tag)}</a>'
             )
+        last = m.end()
+    out.append(html.escape(text[last:]))
     return "".join(out)
 
 
@@ -95,7 +110,7 @@ def format_datetime(iso_str):
 
 
 def render_tweet_html(text, iso_str, icon_path):
-    body = linkify_hashtags(text).replace("\n", "<br>")
+    body = linkify(text).replace("\n", "<br>")
     date_label = format_datetime(iso_str)
     return f"""    <article class="tweet">
       <div class="tweet-header">
