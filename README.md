@@ -6,29 +6,29 @@
 
 以下の2通りの方法がある。
 
-**A. tweets.txt を直接編集する場合**
+**A. tweets.txt を直接編集する場合(旧来の方法、`旧来投稿方法/` 以下)**
 
-1. `tweets.txt` の末尾に、空行区切りで新しいつぶやきを追記する。
+1. `旧来投稿方法/tweets.txt` の末尾に、空行区切りで新しいつぶやきを追記する。
 2. 以下を実行する(HTML再生成 + commit + push を一括で行う)。
 
    ```bash
    ./post.sh
    ```
 
-   または `つぶやきを投稿.command` をダブルクリックする。
+   または `旧来投稿方法/つぶやきを投稿.command` をダブルクリックする。
 
 **B. その場でつぶやきを入力する場合**
 
 1. `新しいツイートを書く.command` をダブルクリックする。
 2. 開いたターミナルにつぶやきを入力する(複数行OK、空行で入力終了)。
-3. 内容を確認して `y` で投稿(`tweets.txt` への追記 + HTML再生成 + commit + push
-   まで自動で行われる)。何も入力しない、または `y` 以外を入力すると中止され、
-   `tweets.txt` には何も書き込まれない。
+3. 内容を確認して `y` で投稿(`旧来投稿方法/tweets.txt` への追記 + HTML再生成 +
+   commit + push まで自動で行われる)。何も入力しない、または `y` 以外を入力すると
+   中止され、`tweets.txt` には何も書き込まれない。
 
 ## 更新方法(スマホから)
 
 1. スマホのブラウザ、またはGitHubアプリで
-   https://github.com/keisato0/tweets/edit/main/tweets.txt を開く。
+   https://github.com/keisato0/tweets/edit/main/旧来投稿方法/tweets.txt を開く。
 2. 末尾に空行を1行はさんで新しいつぶやきを追記する。
 3. そのまま「Commit changes」で `main` ブランチに直接コミットする。
 

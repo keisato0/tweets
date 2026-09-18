@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - tweets.txt
+      - 旧来投稿方法/tweets.txt
       - generate.py
       - style.css
       - icon.jpg

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-tweets.txt からつぶやきを読み込み、旧Twitter風の静的サイトを生成するスクリプト。
+旧来投稿方法/tweets.txt からつぶやきを読み込み、旧Twitter風の静的サイトを生成するスクリプト。
 
 使い方:
-    tweets.txt に空行区切りでつぶやきを追記してから、以下を実行する。
+    旧来投稿方法/tweets.txt に空行区切りでつぶやきを追記してから、以下を実行する。
 
         python3 generate.py
 
@@ -21,7 +21,7 @@ from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parent
-TWEET_FILE = ROOT / "tweets.txt"
+TWEET_FILE = ROOT / "旧来投稿方法" / "tweets.txt"
 STATE_FILE = ROOT / "state.json"
 ARCHIVE_DIR = ROOT / "archive"
 TZ = ZoneInfo("Asia/Tokyo")
