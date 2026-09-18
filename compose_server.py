@@ -6,8 +6,8 @@
     python3 compose_server.py を実行(または compose.command をダブルクリック)
     してブラウザで http://localhost:8765/ を開き、テキストエリアに書いて
     「投稿」を押す。tweets.txt への追記・サイト生成・commit・push まで自動で
-    行われる。投稿に成功するとサーバーは自動的に終了する(何も投稿しないまま
-    しばらく放置した場合もタイムアウトで自動終了する)。
+    行われる。投稿後もそのまま続けて次のツイートを書けるが、しばらく操作が
+    ない場合はタイムアウトでサーバーが自動終了する。
 """
 import http.server
 import json
@@ -71,9 +71,10 @@ async function post() {
     });
     const data = await res.json();
     if (data.ok) {
-      status.textContent = '投稿しました。このタブは閉じてOKです。';
+      status.textContent = '投稿しました。続けて次のツイートを書けます。';
       textEl.value = '';
-      btn.style.display = 'none';
+      btn.disabled = false;
+      textEl.focus();
     } else {
       status.className = 'error';
       status.textContent = 'エラー: ' + data.error;
@@ -108,6 +109,16 @@ def append_tweet(text):
 
 class ReusableServer(socketserver.TCPServer):
     allow_reuse_address = True
+
+
+def reset_idle_timer(httpd):
+    old = getattr(httpd, "idle_timer", None)
+    if old is not None:
+        old.cancel()
+    timer = threading.Timer(IDLE_TIMEOUT_SEC, httpd.shutdown)
+    timer.daemon = True
+    timer.start()
+    httpd.idle_timer = timer
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -167,7 +178,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 capture_output=True, text=True,
             )
             self._send_json({"ok": True})
-            threading.Thread(target=self.server.shutdown, daemon=True).start()
+            reset_idle_timer(self.server)
         except subprocess.CalledProcessError as e:
             self._send_json(
                 {"ok": False, "error": f"{e.cmd}: {e.stderr or e.stdout}"},
@@ -179,14 +190,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 def main():
     with ReusableServer(("127.0.0.1", PORT), Handler) as httpd:
-        timer = threading.Timer(IDLE_TIMEOUT_SEC, httpd.shutdown)
-        timer.daemon = True
-        timer.start()
+        reset_idle_timer(httpd)
         print(f"http://localhost:{PORT}/ を開いてください")
         try:
             httpd.serve_forever()
         finally:
-            timer.cancel()
+            httpd.idle_timer.cancel()
 
 
 if __name__ == "__main__":
