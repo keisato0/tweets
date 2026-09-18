@@ -14,8 +14,10 @@ tweets.txt からつぶやきを読み込み、旧Twitter風の静的サイト�
 """
 import html
 import json
+import re
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parent
@@ -28,6 +30,23 @@ PAGE_SIZE = 100
 HANDLE = "@keisato0"
 SITE_TITLE = "ツイッター"
 ICON_FILENAME = "icon.jpg"
+
+# ハッシュタグは "#" から次の半角スペース(または改行・文末)までとみなす
+HASHTAG_RE = re.compile(r"#([^ \n]+)")
+
+
+def linkify_hashtags(text):
+    parts = HASHTAG_RE.split(text)
+    out = []
+    for i, part in enumerate(parts):
+        if i % 2 == 0:
+            out.append(html.escape(part))
+        else:
+            out.append(
+                f'<a class="hashtag" href="https://x.com/hashtag/{quote(part)}" '
+                f'target="_blank" rel="noopener noreferrer">#{html.escape(part)}</a>'
+            )
+    return "".join(out)
 
 
 def load_tweets():
@@ -76,7 +95,7 @@ def format_datetime(iso_str):
 
 
 def render_tweet_html(text, iso_str, icon_path):
-    body = html.escape(text).replace("\n", "<br>")
+    body = linkify_hashtags(text).replace("\n", "<br>")
     date_label = format_datetime(iso_str)
     return f"""    <article class="tweet">
       <div class="tweet-header">

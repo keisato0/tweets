@@ -94,6 +94,15 @@ body {
   margin-bottom: 6px;
 }
 
+.hashtag {
+  color: var(--blue);
+  text-decoration: none;
+}
+
+.hashtag:hover {
+  text-decoration: underline;
+}
+
 .tweet-date {
   color: var(--sub);
   font-size: 13px;
