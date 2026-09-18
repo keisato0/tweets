@@ -1,6 +1,6 @@
 #!/bin/bash
-# 旧来投稿方法/tweets.txt の変更をサイトに反映して公開する。
-# 使い方: 旧来投稿方法/tweets.txt を編集したら ./post.sh を実行するだけ。
+# tweets.txt の変更をサイトに反映して公開する。
+# 使い方: tweets.txt を編集したら ./post.sh を実行するだけ。
 set -e
 cd "$(dirname "$0")"
 
