@@ -5,9 +5,10 @@
 使い方:
     python3 compose_server.py を実行(または compose.command をダブルクリック)
     してブラウザで http://localhost:8765/ を開き、テキストエリアに書いて
-    「投稿」を押す。tweets.txt への追記・サイト生成・commit・push まで自動で
-    行われる。投稿後もそのまま続けて次のツイートを書けるが、しばらく操作が
-    ない場合はタイムアウトでサーバーが自動終了する。
+    「投稿」を押す。投稿のたびに git pull → tweets.txt への追記 → サイト生成 →
+    commit・push まで自動で行われる(スマホ編集などでリモートが進んでいても
+    自動的に取り込んでからコミットする)。投稿後もそのまま続けて次のツイート
+    を書けるが、しばらく操作がない場合はタイムアウトでサーバーが自動終了する。
 """
 import http.server
 import json
@@ -159,6 +160,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
             text = data.get("text", "").strip()
             if not text:
                 raise ValueError("投稿内容が空です")
+
+            # スマホ編集などでリモートが進んでいる場合に備え、
+            # 追記する前に最新の状態を取り込んでおく
+            subprocess.run(
+                ["git", "pull", "--no-rebase"], cwd=ROOT, check=True,
+                capture_output=True, text=True,
+            )
 
             append_tweet(text)
             subprocess.run(
