@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#1b95e0">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.jpg">
+<title>新しいツイート</title>
+<style>
+  body { font-family: -apple-system, "Hiragino Sans", "Hiragino Kaku Gothic ProN", sans-serif;
+         background:#e6ecf0; margin:0; padding:20px; }
+  .box { max-width:600px; margin:0 auto; background:#fff; border:1px solid #e1e8ed;
+         border-radius:12px; padding:20px; }
+  h1 { font-size:18px; margin:0 0 16px; color:#14171a; }
+  textarea { width:100%; min-height:160px; font-size:16px; padding:12px;
+             border:1px solid #e1e8ed; border-radius:8px; box-sizing:border-box;
+             resize:vertical; font-family:inherit; }
+  textarea:focus { outline:2px solid #1b95e0; }
+  button { margin-top:12px; background:#1b95e0; color:#fff; border:none;
+           padding:10px 24px; border-radius:20px; font-size:15px; font-weight:bold;
+           cursor:pointer; }
+  button:disabled { opacity:0.5; cursor:default; }
+  button.secondary { background:none; color:#657786; font-weight:normal; padding:6px 0; }
+  #status { margin-top:12px; font-size:14px; color:#657786; white-space:pre-wrap; }
+  #status.error { color:#e0245e; }
+  #tokenBox { margin-bottom:16px; padding:12px; background:#f5f8fa; border-radius:8px; }
+  #tokenBox p { font-size:13px; color:#657786; line-height:1.5; margin:0 0 8px; }
+  #tokenBox input { width:100%; box-sizing:border-box; padding:8px; font-size:14px;
+                     border:1px solid #e1e8ed; border-radius:6px; }
+  #tokenLink { font-size:13px; color:#1b95e0; cursor:pointer; text-decoration:underline; }
+</style>
+</head>
+<body>
+<div class="box">
+  <h1>新しいツイート</h1>
+
+  <div id="tokenBox" hidden>
+    <p>
+      GitHubのアクセストークンが必要です。
+      github.com の Settings &gt; Developer settings &gt; Personal access tokens &gt;
+      Fine-grained tokens で、リポジトリを <code>keisato0/tweets</code> のみに限定し、
+      Permissions の <code>Contents: Read and write</code> だけを許可したトークンを
+      発行して貼り付けてください。
+    </p>
+    <input type="password" id="tokenInput" placeholder="github_pat_...">
+    <button onclick="saveToken()">保存</button>
+  </div>
+
+  <textarea id="text" placeholder="いまどうしてる?" autofocus></textarea><br>
+  <button id="postBtn" onclick="post()">投稿</button>
+  <div id="status"></div>
+  <div style="margin-top:16px;">
+    <span id="tokenLink" onclick="showTokenBox()">トークンを変更/削除</span>
+  </div>
+</div>
+<script>
+const REPO = 'keisato0/tweets';
+const FILE_PATH = 'tweets.txt';
+const API_BASE = `https://api.github.com/repos/${REPO}/contents/${FILE_PATH}`;
+
+function getToken() { return localStorage.getItem('gh_token') || ''; }
+function setToken(t) { localStorage.setItem('gh_token', t); }
+function clearToken() { localStorage.removeItem('gh_token'); }
+
+function showTokenBox() {
+  document.getElementById('tokenBox').hidden = false;
+  document.getElementById('tokenInput').value = getToken();
+  document.getElementById('tokenInput').focus();
+}
+
+function saveToken() {
+  const v = document.getElementById('tokenInput').value.trim();
+  if (!v) { clearToken(); } else { setToken(v); }
+  document.getElementById('tokenBox').hidden = true;
+  setStatus('トークンを保存しました。', false);
+}
+
+function setStatus(msg, isError) {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = isError ? 'error' : '';
+}
+
+function b64DecodeUnicode(str) {
+  return decodeURIComponent(atob(str).split('').map(c =>
+    '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
+  ).join(''));
+}
+function b64EncodeUnicode(str) {
+  return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g,
+    (match, p1) => String.fromCharCode('0x' + p1)
+  ));
+}
+
+async function fetchFile(token) {
+  const res = await fetch(API_BASE, {
+    headers: {
+      'Authorization': `token ${token}`,
+      'Accept': 'application/vnd.github+json'
+    }
+  });
+  if (!res.ok) {
+    const err = { status: res.status };
+    throw err;
+  }
+  const data = await res.json();
+  return { sha: data.sha, content: b64DecodeUnicode(data.content) };
+}
+
+function appendTweet(content, text) {
+  let c = content;
+  if (c && !c.endsWith('\n')) c += '\n';
+  if (c && !c.endsWith('\n\n')) c += '\n';
+  c += text.replace(/\n+$/, '') + '\n';
+  return c;
+}
+
+async function putFile(token, sha, newContent) {
+  const res = await fetch(API_BASE, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `token ${token}`,
+      'Accept': 'application/vnd.github+json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      message: 'つぶやきを追加(スマホPWA)',
+      content: b64EncodeUnicode(newContent),
+      sha: sha,
+      branch: 'main'
+    })
+  });
+  if (!res.ok) {
+    const err = { status: res.status };
+    throw err;
+  }
+  return res.json();
+}
+
+async function post() {
+  const textEl = document.getElementById('text');
+  const text = textEl.value;
+  if (!text.trim()) { return; }
+
+  const token = getToken();
+  if (!token) {
+    showTokenBox();
+    setStatus('先にトークンを保存してください。', true);
+    return;
+  }
+
+  const btn = document.getElementById('postBtn');
+  btn.disabled = true;
+  setStatus('投稿中...', false);
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const { sha, content } = await fetchFile(token);
+      const newContent = appendTweet(content, text);
+      await putFile(token, sha, newContent);
+      setStatus('投稿しました。しばらくすると反映されます。続けて次のツイートを書けます。', false);
+      textEl.value = '';
+      btn.disabled = false;
+      textEl.focus();
+      return;
+    } catch (e) {
+      if (attempt === 0 && (e.status === 409 || e.status === 422)) {
+        continue; // 競合。最新を取り直してもう一度だけ試す
+      }
+      if (e.status === 401) {
+        setStatus('認証エラーです。トークンを確認してください。', true);
+      } else {
+        setStatus('エラーが発生しました(status: ' + e.status + ')。', true);
+      }
+      btn.disabled = false;
+      return;
+    }
+  }
+}
+
+if (!getToken()) {
+  showTokenBox();
+}
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "name": "ツイート投稿",
+  "short_name": "投稿",
+  "start_url": "./post.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#e6ecf0",
+  "theme_color": "#1b95e0",
+  "icons": [
+    { "src": "icon.jpg", "sizes": "483x483", "type": "image/jpeg" }
+  ]
+}
