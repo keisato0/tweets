@@ -170,3 +170,46 @@ body {
 .site-footer a:hover {
   text-decoration: underline;
 }
+
+.tweet-images {
+  display: grid;
+  gap: 2px;
+  margin-bottom: 6px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.tweet-images.count-2,
+.tweet-images.count-3,
+.tweet-images.count-4 {
+  grid-template-columns: 1fr 1fr;
+}
+
+.tweet-images a {
+  display: block;
+  line-height: 0;
+}
+
+.tweet-images img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 500px;
+  object-fit: cover;
+}
+
+.tweet-images.count-2 img,
+.tweet-images.count-3 img,
+.tweet-images.count-4 img {
+  aspect-ratio: 1 / 1;
+  height: 100%;
+}
+
+.tweet-images.count-3 a:first-child {
+  grid-row: span 2;
+}
+
+.tweet-images.count-3 a:first-child img {
+  aspect-ratio: auto;
+}

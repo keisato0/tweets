@@ -29,6 +29,21 @@
   #tokenBox input { width:100%; box-sizing:border-box; padding:8px; font-size:14px;
                      border:1px solid #e1e8ed; border-radius:6px; }
   #tokenLink { font-size:13px; color:#1b95e0; cursor:pointer; text-decoration:underline; }
+  .actions { display:flex; align-items:center; gap:12px; margin-top:12px; }
+  .actions button { margin-top:0; }
+  label.attach { color:#1b95e0; font-size:15px; cursor:pointer; padding:8px 4px; }
+  label.attach.disabled { opacity:0.4; cursor:default; }
+  #fileInput { display:none; }
+  #previews { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+  #previews:empty { display:none; }
+  .preview { position:relative; width:80px; height:80px; }
+  .preview img { width:80px; height:80px; object-fit:cover; border-radius:8px;
+                 border:1px solid #e1e8ed; }
+  .preview .remove { position:absolute; top:2px; right:2px; margin:0; padding:0;
+                     width:22px; height:22px; border-radius:50%; background:rgba(0,0,0,0.6);
+                     color:#fff; font-size:14px; line-height:22px; font-weight:bold; }
+  .preview .size { position:absolute; left:4px; bottom:4px; font-size:10px; color:#fff;
+                   background:rgba(0,0,0,0.6); padding:1px 4px; border-radius:4px; }
 </style>
 </head>
 <body>
@@ -47,8 +62,14 @@
     <button onclick="saveToken()">保存</button>
   </div>
 
-  <textarea id="text" placeholder="いまどうしてる?" autofocus></textarea><br>
-  <button id="postBtn" onclick="post()">投稿</button>
+  <textarea id="text" placeholder="いまどうしてる?" autofocus></textarea>
+  <div id="previews"></div>
+  <div class="actions">
+    <button id="postBtn" onclick="post()">投稿</button>
+    <label class="attach" id="attachLabel">画像を追加
+      <input type="file" id="fileInput" accept="image/*" multiple>
+    </label>
+  </div>
   <div id="status"></div>
   <div style="margin-top:16px;">
     <span id="tokenLink" onclick="showTokenBox()">トークンを変更/削除</span>
@@ -58,6 +79,13 @@
 const REPO = 'keisato0/tweets';
 const FILE_PATH = 'tweets.txt';
 const API_BASE = `https://api.github.com/repos/${REPO}/contents/${FILE_PATH}`;
+const IMAGE_DIR = 'images';
+const MAX_IMAGES = 4;
+const MAX_EDGE = 1600;      // 長辺の最大ピクセル数
+const JPEG_QUALITY = 0.85;
+
+// 添付予定の画像。{ blob, url } (リサイズ・メタデータ除去済みのJPEG)
+let attachments = [];
 
 function getToken() { return localStorage.getItem('gh_token') || ''; }
 function setToken(t) { localStorage.setItem('gh_token', t); }
@@ -138,10 +166,192 @@ async function putFile(token, sha, newContent) {
   return res.json();
 }
 
+// ---- 画像の処理 ----
+// 選ばれた画像は、サイズにかかわらず必ずcanvasに描き直してJPEGとして
+// 書き出す。これで長辺がMAX_EDGE以下に縮小され、元ファイルのEXIF
+// (GPS位置情報・撮影日時・機種名など)は新しいファイルに引き継がれない。
+// さらに念のため、書き出したJPEGからJFIF以外のメタデータ領域を取り除き、
+// 残っていないことを確認してからでないとアップロードしない。
+
+async function decodeImage(file) {
+  // imageOrientation: 'from-image' で、写真の向き(EXIF Orientation)を
+  // ピクセルに反映した状態で読み込む(縦向き写真が横倒しにならない)
+  if (window.createImageBitmap) {
+    try {
+      return await createImageBitmap(file, { imageOrientation: 'from-image' });
+    } catch (e) { /* 下のフォールバックへ */ }
+  }
+  const url = URL.createObjectURL(file);
+  try {
+    const img = new Image();
+    img.src = url;
+    await img.decode();  // <img> は既定で向きを反映して描画される
+    return img;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+async function processImage(file) {
+  const src = await decodeImage(file);
+  const w0 = src.width, h0 = src.height;
+  const scale = Math.min(1, MAX_EDGE / Math.max(w0, h0));
+  const w = Math.max(1, Math.round(w0 * scale));
+  const h = Math.max(1, Math.round(h0 * scale));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff';  // 透過PNGの透明部分は白にする(JPEGは透過できない)
+  ctx.fillRect(0, 0, w, h);
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(src, 0, 0, w, h);
+  if (src.close) src.close();
+
+  const blob = await new Promise((resolve, reject) =>
+    canvas.toBlob(b => b ? resolve(b) : reject(new Error('JPEGへの変換に失敗しました')),
+                  'image/jpeg', JPEG_QUALITY));
+  const bytes = stripJpegMetadata(new Uint8Array(await blob.arrayBuffer()));
+  assertNoMetadata(bytes);
+  return new Blob([bytes], { type: 'image/jpeg' });
+}
+
+// JPEGのSOSより前にあるAPP1〜APP15(EXIF, XMP, ICC, IPTCなど)と
+// COM(コメント)セグメントを取り除く。APP0(JFIF)と画像データは残す。
+function stripJpegMetadata(b) {
+  if (b[0] !== 0xFF || b[1] !== 0xD8) throw new Error('JPEGではありません');
+  const out = [b.subarray(0, 2)];
+  let i = 2;
+  while (i < b.length) {
+    if (b[i] !== 0xFF) throw new Error('JPEGの構造が不正です');
+    const marker = b[i + 1];
+    if (marker === 0xFF) { i++; continue; }  // 詰め物
+    if (marker === 0xDA) {  // SOS以降は画像データなのでそのままコピー
+      out.push(b.subarray(i));
+      break;
+    }
+    const len = (b[i + 2] << 8) | b[i + 3];
+    const seg = b.subarray(i, i + 2 + len);
+    const isMeta = (marker >= 0xE1 && marker <= 0xEF) || marker === 0xFE;
+    if (!isMeta) out.push(seg);
+    i += 2 + len;
+  }
+  const total = out.reduce((n, a) => n + a.length, 0);
+  const res = new Uint8Array(total);
+  let off = 0;
+  for (const a of out) { res.set(a, off); off += a.length; }
+  return res;
+}
+
+// 取り除いた結果にメタデータ領域が残っていないことを確認する
+function assertNoMetadata(b) {
+  let i = 2;
+  while (i < b.length) {
+    const marker = b[i + 1];
+    if (marker === 0xDA) return;
+    if ((marker >= 0xE1 && marker <= 0xEF) || marker === 0xFE) {
+      throw new Error('画像のメタデータを削除できませんでした。この画像は投稿できません。');
+    }
+    i += 2 + ((b[i + 2] << 8) | b[i + 3]);
+  }
+}
+
+async function onFilesSelected(e) {
+  const files = Array.from(e.target.files || []);
+  e.target.value = '';
+  const room = MAX_IMAGES - attachments.length;
+  if (files.length > room) {
+    setStatus(`画像は${MAX_IMAGES}枚までです。`, true);
+  }
+  for (const file of files.slice(0, room)) {
+    setStatus('画像を処理中...', false);
+    try {
+      const blob = await processImage(file);
+      attachments.push({ blob, url: URL.createObjectURL(blob) });
+      setStatus('', false);
+    } catch (err) {
+      setStatus('画像を読み込めませんでした: ' + (err.message || err), true);
+    }
+  }
+  renderPreviews();
+}
+
+function renderPreviews() {
+  const box = document.getElementById('previews');
+  box.innerHTML = '';
+  attachments.forEach((a, idx) => {
+    const d = document.createElement('div');
+    d.className = 'preview';
+    const img = document.createElement('img');
+    img.src = a.url;
+    const size = document.createElement('span');
+    size.className = 'size';
+    size.textContent = Math.round(a.blob.size / 1024) + 'KB';
+    const rm = document.createElement('button');
+    rm.className = 'remove';
+    rm.textContent = '×';
+    rm.onclick = () => {
+      URL.revokeObjectURL(a.url);
+      attachments.splice(idx, 1);
+      renderPreviews();
+    };
+    d.append(img, size, rm);
+    box.appendChild(d);
+  });
+  const full = attachments.length >= MAX_IMAGES;
+  document.getElementById('fileInput').disabled = full;
+  document.getElementById('attachLabel').classList.toggle('disabled', full);
+}
+
+function clearAttachments() {
+  attachments.forEach(a => URL.revokeObjectURL(a.url));
+  attachments = [];
+  renderPreviews();
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result.split(',')[1]);
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(blob);
+  });
+}
+
+function imageFileName(n) {
+  const d = new Date();
+  const p = x => String(x).padStart(2, '0');
+  const stamp = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-` +
+                `${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+  const rand = Math.random().toString(36).slice(2, 8);
+  return `${IMAGE_DIR}/${stamp}-${n + 1}-${rand}.jpg`;
+}
+
+async function uploadImage(token, path, blob) {
+  const res = await fetch(`https://api.github.com/repos/${REPO}/contents/${path}`, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `token ${token}`,
+      'Accept': 'application/vnd.github+json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      message: '画像を追加(スマホPWA)',
+      content: await blobToBase64(blob),
+      branch: 'main'
+    })
+  });
+  if (!res.ok) {
+    const err = { status: res.status };
+    throw err;
+  }
+}
+
 async function post() {
   const textEl = document.getElementById('text');
   const text = textEl.value;
-  if (!text.trim()) { return; }
+  if (!text.trim() && attachments.length === 0) { return; }
 
   const token = getToken();
   if (!token) {
@@ -152,15 +362,36 @@ async function post() {
 
   const btn = document.getElementById('postBtn');
   btn.disabled = true;
+
+  // 画像を先にアップロードし、つぶやきには "[img:パス]" の行として書き込む。
+  // (images/ への追加だけではサイトの再ビルドは走らず、
+  //  tweets.txt のコミットで画像込みのサイトが生成される)
+  const imageLines = [];
+  try {
+    for (let n = 0; n < attachments.length; n++) {
+      setStatus(`画像をアップロード中... (${n + 1}/${attachments.length})`, false);
+      const path = imageFileName(n);
+      await uploadImage(token, path, attachments[n].blob);
+      imageLines.push(`[img:${path}]`);
+    }
+  } catch (e) {
+    setStatus(e.status === 401
+      ? '認証エラーです。トークンを確認してください。'
+      : '画像のアップロードに失敗しました(status: ' + e.status + ')。', true);
+    btn.disabled = false;
+    return;
+  }
+  const tweet = [text.replace(/\n+$/, ''), ...imageLines].filter(s => s.trim()).join('\n');
   setStatus('投稿中...', false);
 
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const { sha, content } = await fetchFile(token);
-      const newContent = appendTweet(content, text);
+      const newContent = appendTweet(content, tweet);
       await putFile(token, sha, newContent);
       setStatus('投稿しました。しばらくすると反映されます。続けて次のツイートを書けます。', false);
       textEl.value = '';
+      clearAttachments();
       btn.disabled = false;
       textEl.focus();
       return;
@@ -178,6 +409,8 @@ async function post() {
     }
   }
 }
+
+document.getElementById('fileInput').addEventListener('change', onFilesSelected);
 
 if (!getToken()) {
   showTokenBox();

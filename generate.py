@@ -38,6 +38,24 @@ LINK_RE = re.compile(r"https?://[^\s]+|#([^ \n]+)")
 # URLの末尾によく付着する句読点・記号は、リンクに含めず地の文として残す
 URL_TRAILING_PUNCT = "。、！？!?.,;:)）」』】"
 
+# 添付画像は、つぶやき内の独立した1行 "[img:images/xxx.jpg]" で表す
+# (スマホPWAの投稿フォームが画像をアップロードしたうえで書き込む)。
+# パスは images/ 直下の安全なファイル名に限定する。
+IMAGE_LINE_RE = re.compile(r"^\[img:(images/[A-Za-z0-9_-]+\.(?:jpg|jpeg|png|webp))\]$")
+
+
+def split_images(text):
+    """つぶやき本文から画像行を取り除き、(本文, 画像パスのリスト) を返す。"""
+    lines = []
+    images = []
+    for line in text.split("\n"):
+        m = IMAGE_LINE_RE.match(line.strip())
+        if m:
+            images.append(m.group(1))
+        else:
+            lines.append(line)
+    return "\n".join(lines).strip("\n"), images
+
 
 def linkify(text):
     out = []
@@ -109,8 +127,22 @@ def format_datetime(iso_str):
     return f"{dt.year}年{dt.month}月{dt.day}日 {dt.hour:02d}:{dt.minute:02d}"
 
 
-def render_tweet_html(text, iso_str, icon_path):
+def render_images_html(images, base_path):
+    if not images:
+        return ""
+    items = "".join(
+        f'<a href="{base_path}{img}" target="_blank" rel="noopener noreferrer">'
+        f'<img src="{base_path}{img}" alt="" loading="lazy"></a>'
+        for img in images
+    )
+    return f'\n      <div class="tweet-images count-{min(len(images), 4)}">{items}</div>'
+
+
+def render_tweet_html(text, iso_str, icon_path, base_path=""):
+    text, images = split_images(text)
     body = linkify(text).replace("\n", "<br>")
+    body_html = f'\n      <div class="tweet-body">{body}</div>' if text else ""
+    images_html = render_images_html(images, base_path)
     date_label = format_datetime(iso_str)
     return f"""    <article class="tweet">
       <div class="tweet-header">
@@ -118,8 +150,7 @@ def render_tweet_html(text, iso_str, icon_path):
         <div class="tweet-names">
           <span class="handle">{html.escape(HANDLE)}</span>
         </div>
-      </div>
-      <div class="tweet-body">{body}</div>
+      </div>{body_html}{images_html}
       <div class="tweet-date">{date_label}</div>
     </article>
 """
@@ -150,9 +181,12 @@ PAGE_TEMPLATE = """<!DOCTYPE html>
 """
 
 
-def build_page(tweets_with_ts, title, css_path, icon_path, index_path, nav_html=""):
+def build_page(
+    tweets_with_ts, title, css_path, icon_path, index_path, nav_html="", base_path=""
+):
     tweets_html = "".join(
-        render_tweet_html(text, ts, icon_path) for text, ts in tweets_with_ts
+        render_tweet_html(text, ts, icon_path, base_path)
+        for text, ts in tweets_with_ts
     )
     return PAGE_TEMPLATE.format(
         title=html.escape(title),
@@ -208,6 +242,7 @@ def main():
             icon_path=f"../{ICON_FILENAME}",
             index_path="../index.html",
             nav_html=nav_html,
+            base_path="../",
         )
         (ARCHIVE_DIR / f"page{i}.html").write_text(page_html, encoding="utf-8")
 
