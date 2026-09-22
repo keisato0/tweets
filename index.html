@@ -8,18 +8,13 @@
 </head>
 <body>
 <div class="container">
-  <div class="site-top">
-    <header class="site-header">
+  <header class="site-header site-top">
+    <div class="site-title">
       <h1>ツイッター</h1>
       <p class="tweet-count">57件のツイート</p>
-    </header>
-    <div class="site-search">
-      <form class="search" role="search" action="index.html">
-        <input type="search" name="q" placeholder="ツイートを検索" aria-label="ツイートを検索"
-               autocomplete="off" enterkeyhint="search">
-      </form>
     </div>
-  </div>
+    <a class="header-link" href="search.html">検索</a>
+  </header>
   <main class="timeline">
     <article class="tweet">
       <div class="tweet-header">
@@ -596,6 +591,5 @@
   </main>
 </div>
 <script src="lightbox.js"></script>
-<script src="search.js"></script>
 </body>
 </html>

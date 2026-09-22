@@ -163,19 +163,47 @@ SEARCH_ROOT_TOKEN = "__ROOT__"
 
 
 def render_header_html(total, root):
-    """サイトタイトル・総ツイート件数・検索ボックス。root はトップへの相対パス。"""
-    return f"""  <div class="site-top">
-    <header class="site-header">
+    """青いトップバー(左にタイトルと総ツイート件数、右に検索ページへのリンク)。
+    root はトップへの相対パス。"""
+    return f"""  <header class="site-header site-top">
+    <div class="site-title">
       <h1>{html.escape(SITE_TITLE)}</h1>
       <p class="tweet-count">{total:,}件のツイート</p>
-    </header>
-    <div class="site-search">
-      <form class="search" role="search" action="{root}index.html">
-        <input type="search" name="q" placeholder="ツイートを検索" aria-label="ツイートを検索"
-               autocomplete="off" enterkeyhint="search">
-      </form>
     </div>
+    <a class="header-link" href="{root}search.html">検索</a>
+  </header>
+"""
+
+
+# 検索ページ。上部の検索ボックスに入力すると search.js が結果を表示する
+SEARCH_PAGE_HTML = f"""<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>検索 - {html.escape(SITE_TITLE)}</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="container">
+  <div class="search-bar site-top">
+    <a class="search-back" href="index.html" aria-label="戻る">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 13l5.29 5.29-1.41 1.42L3.59 12l7.7-7.71 1.41 1.42L7.41 11H20v2H7.41z"/></svg>
+    </a>
+    <form class="search" role="search" action="search.html">
+      <input type="search" name="q" placeholder="ツイートを検索" aria-label="ツイートを検索"
+             autocomplete="off" enterkeyhint="search" autofocus>
+    </form>
   </div>
+  <main class="search-results">
+    <div class="search-status" role="status" hidden></div>
+    <div class="search-list"></div>
+  </main>
+</div>
+<script src="lightbox.js"></script>
+<script src="search.js"></script>
+</body>
+</html>
 """
 
 
@@ -213,7 +241,6 @@ PAGE_TEMPLATE = """<!DOCTYPE html>
   </footer>
 </div>
 <script src="{root}lightbox.js"></script>
-<script src="{root}search.js"></script>
 </body>
 </html>
 """
@@ -330,12 +357,12 @@ def main():
 {index_tweets_html}  </main>
 {archive_links_html}</div>
 <script src="lightbox.js"></script>
-<script src="search.js"></script>
 </body>
 </html>
 """
     (ROOT / "index.html").write_text(index_html, encoding="utf-8")
 
+    (ROOT / "search.html").write_text(SEARCH_PAGE_HTML, encoding="utf-8")
     SEARCH_FILE.write_text(
         json.dumps(build_search_index(newest_first), ensure_ascii=False,
                    separators=(",", ":")) + "\n",

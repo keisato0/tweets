@@ -30,7 +30,7 @@ body {
   border-right: 1px solid var(--border);
 }
 
-/* 青いヘッダー(タイトル・件数)と検索ボックスをまとめて画面上部に固定する */
+/* 青いトップバー(一覧ページ)と検索バー(検索ページ)を画面上部に固定する */
 .site-top {
   position: sticky;
   top: 0;
@@ -38,9 +38,25 @@ body {
 }
 
 .site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   background: var(--blue);
   color: #fff;
   padding: 16px 16px 14px;
+}
+
+.header-link {
+  flex-shrink: 0;
+  color: #fff;
+  font-size: 15px;
+  font-weight: bold;
+  text-decoration: none;
+}
+
+.header-link:hover {
+  text-decoration: underline;
 }
 
 .site-header h1 {
@@ -314,15 +330,51 @@ body.lightbox-open {
   overflow: hidden;
 }
 
-/* ページ上部のツイート件数・検索ボックスと検索結果 */
+/* スマホ(画面幅767px以下)ではタイトルを一回り小さくする */
+@media (max-width: 767px) {
+  .site-header h1 {
+    font-size: 24px;
+  }
+}
+
 [hidden] {
   display: none !important;
 }
 
-.site-search {
-  padding: 10px 16px;
+/* 検索ページ */
+.search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px 8px 8px;
   background: var(--card-bg);
   border-bottom: 1px solid var(--border);
+}
+
+.search-back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  color: var(--text);
+}
+
+.search-back:hover {
+  background: #e8f5fd;
+}
+
+.search-back svg {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
+}
+
+.search {
+  flex: 1;
+  min-width: 0;
 }
 
 .search input {
@@ -336,30 +388,6 @@ body.lightbox-open {
   font-family: inherit;
   -webkit-appearance: none;
   appearance: none;
-}
-
-/* PC(画面幅768px以上)では検索ボックスをページ幅の半分にする */
-@media (min-width: 768px) {
-  .search {
-    width: 50%;
-  }
-}
-
-/* スマホ(画面幅767px以下)ではタイトルを一回り小さくし、
-   検索ボックスを幅70%・高さ約90%にする */
-@media (max-width: 767px) {
-  .site-header h1 {
-    font-size: 24px;
-  }
-
-  .search {
-    width: 70%;
-  }
-
-  .search input {
-    padding-top: 6px;
-    padding-bottom: 6px;
-  }
 }
 
 .search input::placeholder {

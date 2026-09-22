@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>検索 - ツイッター</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="container">
+  <div class="search-bar site-top">
+    <a class="search-back" href="index.html" aria-label="戻る">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 13l5.29 5.29-1.41 1.42L3.59 12l7.7-7.71 1.41 1.42L7.41 11H20v2H7.41z"/></svg>
+    </a>
+    <form class="search" role="search" action="search.html">
+      <input type="search" name="q" placeholder="ツイートを検索" aria-label="ツイートを検索"
+             autocomplete="off" enterkeyhint="search" autofocus>
+    </form>
+  </div>
+  <main class="search-results">
+    <div class="search-status" role="status" hidden></div>
+    <div class="search-list"></div>
+  </main>
+</div>
+<script src="lightbox.js"></script>
+<script src="search.js"></script>
+</body>
+</html>

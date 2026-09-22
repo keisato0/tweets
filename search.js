@@ -1,26 +1,16 @@
-// サイト内検索。generate.py が書き出す search.json(全ツイート)を対象に、
-// ページ上部の検索ボックスの入力に合わせてその場で絞り込んで表示する。
+// 検索ページ(search.html)の処理。generate.py が書き出す search.json(全ツイート)を対象に、
+// 上部の検索ボックスの入力に合わせてその場で絞り込んで表示する。
 // スペース区切りで複数語を入れるとすべてを含むツイートに絞る(AND検索)。
 // 全角/半角・大文字/小文字は区別しない。検索語は URL の ?q= に反映される。
 (function () {
   const ROOT = new URL('.', document.currentScript.src).href;
   const ROOT_TOKEN = '__ROOT__';
 
-  const form = document.querySelector('.site-search .search');
+  const form = document.querySelector('.search-bar .search');
   const input = form && form.querySelector('input[name="q"]');
-  const timeline = document.querySelector('.timeline');
-  if (!input || !timeline) return;
-
-  // 検索中は隠す、通常のタイムライン部分
-  const normalParts = [timeline, ...document.querySelectorAll('.archive-list, .pager')];
-
-  const results = document.createElement('section');
-  results.className = 'search-results';
-  results.hidden = true;
-  results.innerHTML = '<div class="search-status" role="status"></div><div class="search-list"></div>';
-  timeline.after(results);
-  const statusEl = results.querySelector('.search-status');
-  const listEl = results.querySelector('.search-list');
+  const statusEl = document.querySelector('.search-status');
+  const listEl = document.querySelector('.search-list');
+  if (!input || !statusEl || !listEl) return;
 
   let index = null;      // [{ t, h, n }]  n は正規化済みの本文
   let loading = null;
@@ -78,15 +68,9 @@
     }
   }
 
-  function showNormal() {
-    results.hidden = true;
-    listEl.innerHTML = '';
-    normalParts.forEach(el => { el.hidden = false; });
-  }
-
-  function showResults() {
-    normalParts.forEach(el => { el.hidden = true; });
-    results.hidden = false;
+  function setStatus(text) {
+    statusEl.textContent = text;
+    statusEl.hidden = !text;
   }
 
   function updateUrl(q) {
@@ -99,27 +83,30 @@
   async function search(raw) {
     const q = raw.trim();
     updateUrl(q);
-    const words = normalize(q).split(/\s+/).filter(Boolean);
-    if (!words.length) { showNormal(); return; }
-
     const my = ++seq;
-    showResults();
+    const words = normalize(q).split(/\s+/).filter(Boolean);
+    if (!words.length) {
+      setStatus('');
+      listEl.innerHTML = '';
+      return;
+    }
+
     if (!index) {
-      statusEl.textContent = '検索中...';
+      setStatus('検索中...');
       listEl.innerHTML = '';
       try {
         await loadIndex();
       } catch (e) {
-        if (my === seq) statusEl.textContent = '検索データを読み込めませんでした。';
+        if (my === seq) setStatus('検索データを読み込めませんでした。');
         return;
       }
     }
     if (my !== seq) return;  // 読み込み中に入力が変わった
 
     const hits = index.filter(it => words.every(w => it.n.includes(w)));
-    statusEl.textContent = hits.length
+    setStatus(hits.length
       ? `「${q}」の検索結果: ${hits.length.toLocaleString()}件`
-      : `「${q}」に一致するツイートはありません。`;
+      : `「${q}」に一致するツイートはありません。`);
     listEl.innerHTML = hits.map(it => it.h).join('');
     const rawWords = q.split(/\s+/).filter(Boolean);
     listEl.querySelectorAll('.tweet-body').forEach(el => highlight(el, rawWords));
@@ -130,7 +117,6 @@
     clearTimeout(timer);
     timer = setTimeout(() => search(input.value), 200);
   });
-  input.addEventListener('focus', () => { loadIndex().catch(() => {}); }, { once: true });
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && input.value) {
       input.value = '';
@@ -144,10 +130,27 @@
     input.blur();  // スマホではキーボードを閉じる
   });
 
+  // 戻るボタン: サイト内から来たときはブラウザの「戻る」で元のページ(スクロール位置も)に戻す
+  const back = document.querySelector('.search-back');
+  if (back) {
+    back.addEventListener('click', (e) => {
+      let fromSite = false;
+      try { fromSite = new URL(document.referrer).origin === location.origin; } catch (err) { /* 直接開いた */ }
+      if (fromSite && history.length > 1) {
+        e.preventDefault();
+        history.back();
+      }
+    });
+  }
+
+  loadIndex().catch(() => {});  // 入力を待たずに読み込んでおく
+
   // ?q= 付きで開かれたらその語で検索する
   const initial = new URL(location.href).searchParams.get('q');
   if (initial) {
     input.value = initial;
     search(initial);
+  } else {
+    input.focus();
   }
 })();
