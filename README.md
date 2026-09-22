@@ -29,14 +29,29 @@
 
 ## 更新方法(スマホから)
 
+**A. PWA投稿フォームを使う場合(推奨)**
+
+1. スマホのブラウザで https://keisato0.github.io/tweets/post.html を開く
+   (あらかじめホーム画面に追加しておくとアプリのように起動できる)。
+2. 初回のみ、GitHubのアクセストークンを求められるので入力する。
+   github.com の Settings > Developer settings > Personal access tokens >
+   Fine-grained tokens で、リポジトリを `keisato0/tweets` のみに限定し、
+   Permissions の `Contents: Read and write` だけを許可したトークンを
+   発行して貼り付ける(トークンは端末のブラウザにのみ保存される)。
+3. テキストエリアに書いて「投稿」を押すと、GitHub API経由で `tweets.txt`
+   に直接追記・コミットされる(コミットメッセージは
+   `つぶやきを追加(スマホPWA)`)。投稿後もそのまま続けて次のツイートを書ける。
+
+**B. GitHubの編集画面を直接使う場合**
+
 1. スマホのブラウザ、またはGitHubアプリで
    https://github.com/keisato0/tweets/edit/main/tweets.txt を開く。
 2. 末尾に空行を1行はさんで新しいつぶやきを追記する。
 3. そのまま「Commit changes」で `main` ブランチに直接コミットする。
 
-コミットすると GitHub Actions (`.github/workflows/build.yml`) が自動で
-`generate.py` を実行し、生成されたサイトを再度コミット・pushしてくれる
-(数十秒〜1分程度)。Mac側での操作は不要。
+いずれの方法でコミットしても GitHub Actions (`.github/workflows/build.yml`)
+が自動で `generate.py` を実行し、生成されたサイトを再度コミット・push
+してくれる(数十秒〜1分程度)。Mac側での操作は不要。
 
 新しく追加されたつぶやきには、生成スクリプトを実行した時刻が投稿日時として
 割り当てられ、`state.json` に記録される(以後の実行で上書きされない)。
