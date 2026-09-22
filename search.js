@@ -1,5 +1,5 @@
 // 検索ページ(search.html)の処理。generate.py が書き出す search.json(全ツイート)を対象に、
-// 上部の検索ボックスの入力に合わせてその場で絞り込んで表示する。
+// 上部の検索ボックスで Enter を押したときに絞り込んで表示する(入力中は何もしない)。
 // スペース区切りで複数語を入れるとすべてを含むツイートに絞る(AND検索)。
 // 全角/半角・大文字/小文字は区別しない。検索語は URL の ?q= に反映される。
 (function () {
@@ -31,7 +31,7 @@
           return index;
         })
         .catch(err => {
-          loading = null;  // 次の入力で再試行する
+          loading = null;  // 次の検索で再試行する
           throw err;
         });
     }
@@ -101,7 +101,7 @@
         return;
       }
     }
-    if (my !== seq) return;  // 読み込み中に入力が変わった
+    if (my !== seq) return;  // 読み込み中に別の検索が始まった
 
     const hits = index.filter(it => words.every(w => it.n.includes(w)));
     setStatus(hits.length
@@ -112,11 +112,6 @@
     listEl.querySelectorAll('.tweet-body').forEach(el => highlight(el, rawWords));
   }
 
-  let timer = null;
-  input.addEventListener('input', () => {
-    clearTimeout(timer);
-    timer = setTimeout(() => search(input.value), 200);
-  });
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && input.value) {
       input.value = '';
@@ -125,7 +120,6 @@
   });
   form.addEventListener('submit', (e) => {
     e.preventDefault();
-    clearTimeout(timer);
     search(input.value);
     input.blur();  // スマホではキーボードを閉じる
   });

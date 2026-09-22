@@ -175,7 +175,7 @@ def render_header_html(total, root):
 """
 
 
-# 検索ページ。上部の検索ボックスに入力すると search.js が結果を表示する
+# 検索ページ。上部の検索ボックスで Enter を押すと search.js が結果を表示する
 SEARCH_PAGE_HTML = f"""<!DOCTYPE html>
 <html lang="ja">
 <head>
