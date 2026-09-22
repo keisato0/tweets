@@ -114,3 +114,5 @@ ObsidianにGoogle calender を表示させる設定だけで1時間半費やし�
 今日も雨だった街。
 [img:images/20260922-210653-1-lp0oi4.jpg]
 [img:images/20260922-210656-2-q2lutq.jpg]
+
+スマホから画像投稿できるようにしてみた。
