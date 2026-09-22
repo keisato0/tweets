@@ -6,7 +6,7 @@
   const ROOT = new URL('.', document.currentScript.src).href;
   const ROOT_TOKEN = '__ROOT__';
 
-  const form = document.querySelector('.site-info .search');
+  const form = document.querySelector('.site-search .search');
   const input = form && form.querySelector('input[name="q"]');
   const timeline = document.querySelector('.timeline');
   if (!input || !timeline) return;
