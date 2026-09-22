@@ -195,8 +195,26 @@ body {
   display: block;
   width: 100%;
   height: auto;
-  max-height: 500px;
   object-fit: cover;
+}
+
+/* 1枚のときは切り抜かず、高さを抑えて縦横比を保ったまま表示する */
+.tweet-images.count-1 {
+  display: inline-grid;
+  max-width: 100%;
+}
+
+.tweet-images.count-1 img {
+  width: auto;
+  max-width: 100%;
+  max-height: 300px;
+}
+
+/* 複数枚のときは並び全体の幅を抑える */
+.tweet-images.count-2,
+.tweet-images.count-3,
+.tweet-images.count-4 {
+  max-width: 400px;
 }
 
 .tweet-images.count-2 img,
