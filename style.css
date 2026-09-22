@@ -345,6 +345,23 @@ body.lightbox-open {
   }
 }
 
+/* スマホ(画面幅767px以下)ではタイトルを一回り小さくし、
+   検索ボックスを幅70%・高さ約90%にする */
+@media (max-width: 767px) {
+  .site-header h1 {
+    font-size: 24px;
+  }
+
+  .search {
+    width: 70%;
+  }
+
+  .search input {
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+}
+
 .search input::placeholder {
   color: var(--sub);
 }
