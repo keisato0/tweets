@@ -338,6 +338,13 @@ body.lightbox-open {
   appearance: none;
 }
 
+/* PC(画面幅768px以上)では検索ボックスをページ幅の半分にする */
+@media (min-width: 768px) {
+  .search {
+    width: 50%;
+  }
+}
+
 .search input::placeholder {
   color: var(--sub);
 }
