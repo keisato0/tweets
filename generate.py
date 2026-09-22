@@ -176,6 +176,7 @@ PAGE_TEMPLATE = """<!DOCTYPE html>
     <a href="{index_path}">&larr; 最新のつぶやきへ戻る</a>
   </footer>
 </div>
+<script src="{js_path}"></script>
 </body>
 </html>
 """
@@ -191,6 +192,7 @@ def build_page(
     return PAGE_TEMPLATE.format(
         title=html.escape(title),
         css_path=css_path,
+        js_path=css_path.replace("style.css", "lightbox.js"),
         site_title=html.escape(SITE_TITLE),
         handle=html.escape(HANDLE),
         tweets_html=tweets_html,
@@ -286,6 +288,7 @@ def main():
   <main class="timeline">
 {index_tweets_html}  </main>
 {archive_links_html}</div>
+<script src="lightbox.js"></script>
 </body>
 </html>
 """
