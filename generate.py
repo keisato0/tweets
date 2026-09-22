@@ -23,6 +23,7 @@ from zoneinfo import ZoneInfo
 ROOT = Path(__file__).resolve().parent
 TWEET_FILE = ROOT / "tweets.txt"
 STATE_FILE = ROOT / "state.json"
+SEARCH_FILE = ROOT / "search.json"
 ARCHIVE_DIR = ROOT / "archive"
 TZ = ZoneInfo("Asia/Tokyo")
 PAGE_SIZE = 100
@@ -156,6 +157,40 @@ def render_tweet_html(text, iso_str, icon_path, base_path=""):
 """
 
 
+# 検索用データ内のパスの先頭に置く目印。search.js が表示するときに
+# サイトのトップのURLに置き換える(どの階層のページから検索しても画像等が表示できるように)
+SEARCH_ROOT_TOKEN = "__ROOT__"
+
+
+def render_header_html(total, root):
+    """サイトタイトル・総ツイート件数・検索ボックス。root はトップへの相対パス。"""
+    return f"""  <header class="site-header">
+    <h1>{html.escape(SITE_TITLE)}</h1>
+    <p class="site-sub">{total:,}件のツイート</p>
+    <form class="search" role="search" action="{root}index.html">
+      <input type="search" name="q" placeholder="ツイートを検索" aria-label="ツイートを検索"
+             autocomplete="off" enterkeyhint="search">
+    </form>
+  </header>
+"""
+
+
+def build_search_index(newest_first):
+    """全ツイートの検索用データ(新しい順)。t は検索対象の本文、h は表示用HTML。"""
+    items = []
+    for text, ts in newest_first:
+        body, _ = split_images(text)
+        items.append(
+            {
+                "t": body,
+                "h": render_tweet_html(
+                    text, ts, SEARCH_ROOT_TOKEN + ICON_FILENAME, SEARCH_ROOT_TOKEN
+                ).strip(),
+            }
+        )
+    return items
+
+
 PAGE_TEMPLATE = """<!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -166,24 +201,29 @@ PAGE_TEMPLATE = """<!DOCTYPE html>
 </head>
 <body>
 <div class="container">
-  <header class="site-header">
-    <h1>{site_title}</h1>
-  </header>
-  <main class="timeline">
+{header_html}  <main class="timeline">
 {tweets_html}  </main>
 {nav_html}
   <footer class="site-footer">
     <a href="{index_path}">&larr; 最新のつぶやきへ戻る</a>
   </footer>
 </div>
-<script src="{js_path}"></script>
+<script src="{root}lightbox.js"></script>
+<script src="{root}search.js"></script>
 </body>
 </html>
 """
 
 
 def build_page(
-    tweets_with_ts, title, css_path, icon_path, index_path, nav_html="", base_path=""
+    tweets_with_ts,
+    title,
+    css_path,
+    icon_path,
+    index_path,
+    header_html,
+    nav_html="",
+    base_path="",
 ):
     tweets_html = "".join(
         render_tweet_html(text, ts, icon_path, base_path)
@@ -192,9 +232,8 @@ def build_page(
     return PAGE_TEMPLATE.format(
         title=html.escape(title),
         css_path=css_path,
-        js_path=css_path.replace("style.css", "lightbox.js"),
-        site_title=html.escape(SITE_TITLE),
-        handle=html.escape(HANDLE),
+        root=base_path,
+        header_html=header_html,
         tweets_html=tweets_html,
         nav_html=nav_html,
         index_path=index_path,
@@ -243,6 +282,7 @@ def main():
             css_path="../style.css",
             icon_path=f"../{ICON_FILENAME}",
             index_path="../index.html",
+            header_html=render_header_html(len(tweets), "../"),
             nav_html=nav_html,
             base_path="../",
         )
@@ -282,17 +322,21 @@ def main():
 </head>
 <body>
 <div class="container">
-  <header class="site-header">
-    <h1>{html.escape(SITE_TITLE)}</h1>
-  </header>
-  <main class="timeline">
+{render_header_html(len(tweets), "")}  <main class="timeline">
 {index_tweets_html}  </main>
 {archive_links_html}</div>
 <script src="lightbox.js"></script>
+<script src="search.js"></script>
 </body>
 </html>
 """
     (ROOT / "index.html").write_text(index_html, encoding="utf-8")
+
+    SEARCH_FILE.write_text(
+        json.dumps(build_search_index(newest_first), ensure_ascii=False,
+                   separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
 
     print(f"tweets: {len(tweets)} 件 / archive pages: {len(pages)}")
 

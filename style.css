@@ -305,3 +305,52 @@ body {
 body.lightbox-open {
   overflow: hidden;
 }
+
+/* ヘッダーの検索ボックスと検索結果 */
+[hidden] {
+  display: none !important;
+}
+
+.search {
+  margin-top: 10px;
+}
+
+.search input {
+  width: 100%;
+  padding: 8px 14px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--text);
+  font-size: 16px; /* iPhoneで入力時に拡大されないよう16px以上にする */
+  font-family: inherit;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.search input::placeholder {
+  color: var(--sub);
+}
+
+.search input:focus {
+  outline: 2px solid #fff;
+  outline-offset: 1px;
+  background: #fff;
+}
+
+.search-results {
+  border-top: 1px solid var(--border);
+}
+
+.search-status {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  color: var(--sub);
+  font-size: 14px;
+}
+
+.search-list mark {
+  background: #fff3a3;
+  color: inherit;
+  border-radius: 2px;
+}
