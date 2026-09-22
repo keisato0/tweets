@@ -166,12 +166,14 @@ def render_header_html(total, root):
     """サイトタイトル・総ツイート件数・検索ボックス。root はトップへの相対パス。"""
     return f"""  <header class="site-header">
     <h1>{html.escape(SITE_TITLE)}</h1>
-    <p class="site-sub">{total:,}件のツイート</p>
+  </header>
+  <div class="site-info">
+    <p class="tweet-count">{total:,}件のツイート</p>
     <form class="search" role="search" action="{root}index.html">
       <input type="search" name="q" placeholder="ツイートを検索" aria-label="ツイートを検索"
              autocomplete="off" enterkeyhint="search">
     </form>
-  </header>
+  </div>
 """
 
 

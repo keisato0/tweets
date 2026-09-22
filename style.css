@@ -306,21 +306,27 @@ body.lightbox-open {
   overflow: hidden;
 }
 
-/* ヘッダーの検索ボックスと検索結果 */
+/* ページ上部のツイート件数・検索ボックスと検索結果 */
 [hidden] {
   display: none !important;
 }
 
-.search {
-  margin-top: 10px;
+.site-info {
+  padding: 12px 16px;
+}
+
+.tweet-count {
+  margin: 0 0 10px;
+  color: var(--sub);
+  font-size: 13px;
 }
 
 .search input {
   width: 100%;
   padding: 8px 14px;
-  border: none;
+  border: 1px solid var(--border);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.95);
+  background: #f5f8fa;
   color: var(--text);
   font-size: 16px; /* iPhoneで入力時に拡大されないよう16px以上にする */
   font-family: inherit;
@@ -333,8 +339,8 @@ body.lightbox-open {
 }
 
 .search input:focus {
-  outline: 2px solid #fff;
-  outline-offset: 1px;
+  outline: none;
+  border-color: var(--blue);
   background: #fff;
 }
 

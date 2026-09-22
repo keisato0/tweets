@@ -1,12 +1,12 @@
 // サイト内検索。generate.py が書き出す search.json(全ツイート)を対象に、
-// ヘッダーの検索ボックスの入力に合わせてその場で絞り込んで表示する。
+// ページ上部の検索ボックスの入力に合わせてその場で絞り込んで表示する。
 // スペース区切りで複数語を入れるとすべてを含むツイートに絞る(AND検索)。
 // 全角/半角・大文字/小文字は区別しない。検索語は URL の ?q= に反映される。
 (function () {
   const ROOT = new URL('.', document.currentScript.src).href;
   const ROOT_TOKEN = '__ROOT__';
 
-  const form = document.querySelector('.site-header .search');
+  const form = document.querySelector('.site-info .search');
   const input = form && form.querySelector('input[name="q"]');
   const timeline = document.querySelector('.timeline');
   if (!input || !timeline) return;
