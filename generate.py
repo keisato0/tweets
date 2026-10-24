@@ -183,6 +183,7 @@ SEARCH_PAGE_HTML = f"""<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>検索 - {html.escape(SITE_TITLE)}</title>
 <link rel="stylesheet" href="style.css">
+<link rel="icon" href="{ICON_FILENAME}">
 </head>
 <body>
 <div class="container">
@@ -230,6 +231,7 @@ PAGE_TEMPLATE = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title}</title>
 <link rel="stylesheet" href="{css_path}">
+<link rel="icon" href="{root}icon.jpg">
 </head>
 <body>
 <div class="container">
@@ -350,6 +352,7 @@ def main():
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{html.escape(SITE_TITLE)}</title>
 <link rel="stylesheet" href="style.css">
+<link rel="icon" href="{ICON_FILENAME}">
 </head>
 <body>
 <div class="container">
