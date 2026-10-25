@@ -140,9 +140,14 @@ def sync_timestamps(tweets, state):
     return timestamps
 
 
+def format_date(iso_str):
+    dt = datetime.fromisoformat(iso_str)
+    return f"{dt.year}年{dt.month}月{dt.day}日"
+
+
 def format_datetime(iso_str):
     dt = datetime.fromisoformat(iso_str)
-    return f"{dt.year}年{dt.month}月{dt.day}日 {dt.hour:02d}:{dt.minute:02d}"
+    return f"{format_date(iso_str)} {dt.hour:02d}:{dt.minute:02d}"
 
 
 def render_images_html(images, base_path):
@@ -328,7 +333,7 @@ def main():
         nav_html = f'  <nav class="pager">{"".join(nav_parts)}</nav>\n'
         page_html = build_page(
             page_tweets,
-            title=f"{SITE_TITLE} ({first_no}〜{last_no}件目)",
+            title=f"{SITE_TITLE} ({first_no} - {last_no}件目)",
             css_path="../style.css",
             icon_path=f"../{ICON_FILENAME}",
             index_path="../index.html",
@@ -345,12 +350,12 @@ def main():
         for i, page_tweets in enumerate(pages, start=2):
             first_no = PAGE_SIZE + (i - 2) * PAGE_SIZE + 1
             last_no = first_no + len(page_tweets) - 1
-            oldest_date = format_datetime(page_tweets[-1][1])
-            newest_date = format_datetime(page_tweets[0][1])
+            oldest_date = format_date(page_tweets[-1][1])
+            newest_date = format_date(page_tweets[0][1])
             items.append(
                 f'      <li><a href="archive/page{i}.html">'
-                f"{first_no}〜{last_no}件目 "
-                f"({oldest_date} 〜 {newest_date})</a></li>\n"
+                f"{first_no} - {last_no}件目 "
+                f"({oldest_date} - {newest_date})</a></li>\n"
             )
         archive_links_html = (
             '  <section class="archive-list">\n'
