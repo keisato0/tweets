@@ -39,6 +39,11 @@ LINK_RE = re.compile(r"https?://[^\s]+|#([^ \n]+)")
 # URLの末尾によく付着する句読点・記号は、リンクに含めず地の文として残す
 URL_TRAILING_PUNCT = "。、！？!?.,;:)）」』】"
 
+# リンクの表示は "http(s)://" と "www." を落とし、長い場合は末尾を省略する
+# (href はフルURLのままなので、クリック先は変わらない)
+URL_DISPLAY_MAX = 30
+URL_SCHEME_RE = re.compile(r"^https?://(?:www\.)?")
+
 # 添付画像は、つぶやき内の独立した1行 "[img:images/xxx.jpg]" で表す
 # (スマホPWAの投稿フォームが画像をアップロードしたうえで書き込む)。
 # パスは images/ 直下の安全なファイル名に限定する。
@@ -58,6 +63,16 @@ def split_images(text):
     return "\n".join(lines).strip("\n"), images
 
 
+def shorten_url(url):
+    """リンクに表示する文字列。短縮は見た目だけで、URL自体は変えない。"""
+    disp = URL_SCHEME_RE.sub("", url)
+    if disp.endswith("/"):
+        disp = disp[:-1]
+    if len(disp) > URL_DISPLAY_MAX:
+        disp = disp[: URL_DISPLAY_MAX - 1] + "…"
+    return disp or url
+
+
 def linkify(text):
     out = []
     last = 0
@@ -70,7 +85,9 @@ def linkify(text):
             trailing = url[len(trimmed) :]
             out.append(
                 f'<a href="{html.escape(trimmed, quote=True)}" '
-                f'target="_blank" rel="noopener noreferrer">{html.escape(trimmed)}</a>'
+                f'title="{html.escape(trimmed, quote=True)}" '
+                f'target="_blank" rel="noopener noreferrer">'
+                f'{html.escape(shorten_url(trimmed))}</a>'
                 f"{html.escape(trailing)}"
             )
         else:
