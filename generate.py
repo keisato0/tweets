@@ -140,6 +140,10 @@ def sync_timestamps(tweets, state):
     return timestamps
 
 
+# 曜日の表記(datetime.weekday() は月曜が0)
+WEEKDAY_LABELS = "月火水木金土日"
+
+
 def format_date(iso_str):
     dt = datetime.fromisoformat(iso_str)
     return f"{dt.year}年{dt.month}月{dt.day}日"
@@ -147,7 +151,8 @@ def format_date(iso_str):
 
 def format_datetime(iso_str):
     dt = datetime.fromisoformat(iso_str)
-    return f"{format_date(iso_str)} {dt.hour:02d}:{dt.minute:02d}"
+    weekday = WEEKDAY_LABELS[dt.weekday()]
+    return f"{format_date(iso_str)} {dt.hour:02d}:{dt.minute:02d} {weekday}曜日"
 
 
 def render_images_html(images, base_path):
