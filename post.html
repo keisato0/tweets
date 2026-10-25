@@ -13,8 +13,6 @@
   .box { max-width:600px; margin:0 auto; background:#fff; border:1px solid #e1e8ed;
          border-radius:12px; padding:20px; }
   h1 { font-size:18px; margin:0 0 16px; color:#14171a; }
-  h1 a { color:#1b95e0; text-decoration:none; }
-  h1 a:hover { text-decoration:underline; }
   textarea { width:100%; min-height:160px; font-size:16px; padding:12px;
              border:1px solid #e1e8ed; border-radius:8px; box-sizing:border-box;
              resize:vertical; font-family:inherit; }
@@ -31,6 +29,7 @@
   #tokenBox input { width:100%; box-sizing:border-box; padding:8px; font-size:14px;
                      border:1px solid #e1e8ed; border-radius:6px; }
   #tokenLink { font-size:13px; color:#1b95e0; cursor:pointer; text-decoration:underline; }
+  #listLink { display:block; margin-bottom:8px; font-size:13px; color:#1b95e0; }
   .actions { display:flex; align-items:center; gap:12px; margin-top:12px; }
   .actions button { margin-top:0; }
   label.attach { color:#1b95e0; font-size:15px; cursor:pointer; padding:8px 4px; }
@@ -52,7 +51,7 @@
 </head>
 <body>
 <div class="box">
-  <h1><a href="index.html">ツイッター</a>への新しいツイート</h1>
+  <h1>新しいツイート</h1>
 
   <div id="tokenBox" hidden>
     <p>
@@ -77,6 +76,7 @@
   </div>
   <div id="status"></div>
   <div style="margin-top:16px;">
+    <a id="listLink" href="index.html">ツイート一覧へ</a>
     <span id="tokenLink" onclick="showTokenBox()">トークンを変更/削除</span>
   </div>
 </div>
