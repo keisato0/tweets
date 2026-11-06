@@ -89,6 +89,29 @@ PAGE = """<!doctype html>
   .preview .size { position:absolute; left:4px; bottom:4px; font-size:10px; color:#fff;
            background:rgba(0,0,0,0.6); border-radius:4px; padding:0 3px; }
 
+  /* その場での編集 */
+  .editing { padding:12px 16px; }
+  .editing textarea { width:100%; min-height:80px; font-size:16px; padding:10px;
+           border:1px solid var(--border); border-radius:8px; box-sizing:border-box;
+           resize:vertical; font-family:inherit; }
+  .editing textarea:focus { outline:2px solid var(--blue); }
+  .edit-images { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+  .edit-images:empty { display:none; }
+  .edit-quote { margin-top:8px; font-size:13px; color:var(--sub);
+           display:flex; align-items:center; gap:6px; }
+  .edit-quote:empty { display:none; }
+  .edit-actions { display:flex; align-items:center; gap:12px; margin-top:10px; }
+  .edit-actions button { background:var(--blue); color:#fff; border:none;
+           padding:8px 20px; border-radius:18px; font-size:14px; font-weight:bold;
+           cursor:pointer; font-family:inherit; }
+  .edit-actions button:disabled { opacity:0.5; cursor:default; }
+  .edit-actions button.plain { background:transparent; color:var(--sub);
+           font-weight:normal; padding:8px 4px; }
+  .edit-actions label.attach { margin-left:auto; }
+  .tweet-row .edit { width:32px; border-radius:50%; }
+  .tweet-row .edit:hover { background:#e8f5fd; color:var(--blue); }
+  .tweet-row .edit svg { width:18px; height:18px; fill:currentColor; }
+
   /* 一覧。つぶやき1件ごとに、右上へ操作ボタンを重ねる */
   .tweet-row { position:relative; }
   .tweet-row .actions { position:absolute; top:10px; right:10px;
@@ -165,42 +188,222 @@ function setQuoting(item) {
   }
 }
 
+const PENCIL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>';
+
+let editing = null;   // 編集中のつぶやきの通し番号(同時に1件だけ)
+
+// つぶやき1件ぶんの行を組み立てる
+function buildRow(item) {
+  const row = document.createElement('div');
+  row.className = 'tweet-row';
+  row.innerHTML = item.html;
+
+  const actions = document.createElement('div');
+  actions.className = 'actions';
+
+  const editBtn = document.createElement('button');
+  editBtn.className = 'edit';
+  editBtn.innerHTML = PENCIL;
+  editBtn.title = 'このつぶやきを編集';
+  editBtn.setAttribute('aria-label', 'このつぶやきを編集');
+  editBtn.addEventListener('click', () => startEdit(item, row));
+  actions.appendChild(editBtn);
+
+  const quoteBtn = document.createElement('button');
+  quoteBtn.className = 'quote';
+  quoteBtn.innerHTML = RETWEET;
+  quoteBtn.title = 'このつぶやきを引用して書く';
+  quoteBtn.setAttribute('aria-label', 'このつぶやきを引用して書く');
+  quoteBtn.addEventListener('click', () => setQuoting(item));
+  actions.appendChild(quoteBtn);
+
+  const delBtn = document.createElement('button');
+  delBtn.className = 'del';
+  delBtn.innerHTML = TRASH;
+  delBtn.title = '削除';
+  delBtn.setAttribute('aria-label', 'このつぶやきを削除');
+  delBtn.addEventListener('click', () => del(item, delBtn));
+  actions.appendChild(delBtn);
+
+  row.appendChild(actions);
+  return row;
+}
+
+// 行をその場で編集欄に差し替える。本文だけを直せるようにして、画像と引用は
+// 別に並べて外せるようにする([img:] や [rt:] の行を手で触らせない)
+function startEdit(item, row) {
+  if (editing !== null) {
+    setStatus('ほかのつぶやきを編集中です。先にそちらを終えてください。', true);
+    return;
+  }
+  editing = item.id;
+  const keep = item.images.slice();     // 残す既存の画像
+  const added = [];                     // 新しく足す画像 { blob, url }
+  let quoteId = item.quote_id;
+
+  row.innerHTML = '';
+  const box = document.createElement('div');
+  box.className = 'editing';
+
+  const ta = document.createElement('textarea');
+  ta.value = item.preview;
+  box.appendChild(ta);
+
+  const thumbs = document.createElement('div');
+  thumbs.className = 'edit-images';
+  box.appendChild(thumbs);
+
+  const quoteBox = document.createElement('div');
+  quoteBox.className = 'edit-quote';
+  box.appendChild(quoteBox);
+
+  const acts = document.createElement('div');
+  acts.className = 'edit-actions';
+  const saveBtn = document.createElement('button');
+  saveBtn.textContent = '保存';
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'plain';
+  cancelBtn.textContent = 'やめる';
+  const label = document.createElement('label');
+  label.className = 'attach';
+  label.textContent = '画像を追加';
+  const fileIn = document.createElement('input');
+  fileIn.type = 'file';
+  fileIn.accept = 'image/*';
+  fileIn.multiple = true;
+  fileIn.style.display = 'none';
+  label.appendChild(fileIn);
+  acts.append(saveBtn, cancelBtn, label);
+  box.appendChild(acts);
+  row.appendChild(box);
+
+  function thumb(src, onRemove, note) {
+    const d = document.createElement('div');
+    d.className = 'preview';
+    const img = document.createElement('img');
+    img.src = src;
+    const rm = document.createElement('button');
+    rm.className = 'remove';
+    rm.textContent = '×';
+    rm.title = 'この画像を外す';
+    rm.onclick = onRemove;
+    d.append(img, rm);
+    if (note) {
+      const s = document.createElement('span');
+      s.className = 'size';
+      s.textContent = note;
+      d.appendChild(s);
+    }
+    return d;
+  }
+
+  function redraw() {
+    thumbs.innerHTML = '';
+    keep.forEach((path, i) => thumbs.appendChild(
+      thumb('/' + path, () => { keep.splice(i, 1); redraw(); })));
+    added.forEach((a, i) => thumbs.appendChild(
+      thumb(a.url, () => { URL.revokeObjectURL(a.url); added.splice(i, 1); redraw(); },
+            Math.round(a.blob.size / 1024) + 'KB')));
+    const full = keep.length + added.length >= MAX_IMAGES;
+    fileIn.disabled = full;
+    label.classList.toggle('disabled', full);
+
+    quoteBox.innerHTML = '';
+    if (quoteId !== null && quoteId !== undefined) {
+      const span = document.createElement('span');
+      span.textContent = '引用: 通し番号 ' + quoteId;
+      const rm = document.createElement('button');
+      rm.className = 'plain';
+      rm.style.padding = '0 4px';
+      rm.textContent = '×';
+      rm.title = '引用を外す';
+      rm.onclick = () => { quoteId = null; redraw(); };
+      quoteBox.append(span, rm);
+    }
+  }
+  redraw();
+
+  function finish() {
+    editing = null;
+    added.forEach(a => URL.revokeObjectURL(a.url));
+  }
+
+  fileIn.addEventListener('change', async (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    const room = MAX_IMAGES - (keep.length + added.length);
+    if (files.length > room) { setStatus(`画像は${MAX_IMAGES}枚までです。`, true); }
+    for (const f of files.slice(0, room)) {
+      setStatus('画像を処理中...');
+      try {
+        const blob = await processImage(f);
+        added.push({ blob, url: URL.createObjectURL(blob) });
+        setStatus('');
+      } catch (err) {
+        setStatus('画像を読み込めませんでした: ' + (err.message || err), true);
+      }
+    }
+    redraw();
+  });
+
+  cancelBtn.addEventListener('click', () => {
+    finish();
+    row.replaceWith(buildRow(item));
+    setStatus('');
+  });
+
+  saveBtn.addEventListener('click', async () => {
+    saveBtn.disabled = true;
+    cancelBtn.disabled = true;
+    setStatus('保存中...');
+    try {
+      const newImages = [];
+      for (let i = 0; i < added.length; i++) {
+        newImages.push({ name: imageFileName(i), data: await blobToBase64(added[i].blob) });
+      }
+      const res = await fetch('/edit', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          index: item.index,
+          original_text: item.text,
+          body: ta.value,
+          keep_images: keep,
+          new_images: newImages,
+          quote_id: quoteId === undefined ? null : quoteId
+        })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        finish();
+        setStatus('保存しました。');
+        await loadList();
+      } else {
+        setStatus('エラー: ' + data.error, true);
+        saveBtn.disabled = false;
+        cancelBtn.disabled = false;
+      }
+    } catch (e) {
+      setStatus('通信エラー: ' + e, true);
+      saveBtn.disabled = false;
+      cancelBtn.disabled = false;
+    }
+  });
+
+  ta.focus();
+}
+
 async function loadList() {
   const listStatus = document.getElementById('listStatus');
   try {
     const res = await fetch('/tweets');
     const data = await res.json();
     if (!data.ok) { throw new Error(data.error); }
+    editing = null;
     document.getElementById('count').textContent = data.items.length + '件のツイート';
     const list = document.getElementById('list');
     list.innerHTML = '';
-    for (const item of data.items) {
-      const row = document.createElement('div');
-      row.className = 'tweet-row';
-      row.innerHTML = item.html;
-
-      const actions = document.createElement('div');
-      actions.className = 'actions';
-
-      const quoteBtn = document.createElement('button');
-      quoteBtn.className = 'quote';
-      quoteBtn.innerHTML = RETWEET;
-      quoteBtn.title = 'このつぶやきを引用して書く';
-      quoteBtn.setAttribute('aria-label', 'このつぶやきを引用して書く');
-      quoteBtn.addEventListener('click', () => setQuoting(item));
-      actions.appendChild(quoteBtn);
-
-      const delBtn = document.createElement('button');
-      delBtn.className = 'del';
-      delBtn.title = '削除';
-      delBtn.setAttribute('aria-label', 'このつぶやきを削除');
-      delBtn.innerHTML = TRASH;
-      delBtn.addEventListener('click', () => del(item, delBtn));
-      actions.appendChild(delBtn);
-
-      row.appendChild(actions);
-      list.appendChild(row);
-    }
+    for (const item of data.items) { list.appendChild(buildRow(item)); }
     listStatus.hidden = true;
   } catch (e) {
     listStatus.hidden = false;
@@ -554,12 +757,14 @@ def list_payload():
     items = []
     for i in range(len(triples) - 1, -1, -1):
         text, ts, tid = triples[i]
-        body, _ = generate.split_images(text)
-        body, _ = generate.split_quote(body)
+        body, images = generate.split_images(text)
+        body, quote_id = generate.split_quote(body)
         items.append(
             {
                 "index": i,
                 "id": tid,
+                "images": images,
+                "quote_id": quote_id,
                 # text は tweets.txt の生のかたまり(削除時の照合に使う)、
                 # preview は画像行や引用行を除いた本文(画面に出す用)
                 "text": text,
@@ -583,6 +788,70 @@ def quote_marker(quote_id):
     return f"\n[rt:{quote_id}]"
 
 
+# つぶやきは空行で区切られるので、本文の中に空行があると
+# 1件が2件に分かれてしまう(日時や通し番号との対応が崩れる)
+BLANK_LINE_RE = re.compile(r"\n[ \t]*\n")
+
+
+def locate_tweet(tweets, index, text):
+    """位置と本文の両方で照合して、書き換える場所を決める。
+    一覧を開いたあとに順番が変わっていた場合は、本文で探し直す。"""
+    if 0 <= index < len(tweets) and tweets[index] == text:
+        return index
+    matches = [i for i, t in enumerate(tweets) if t == text]
+    if len(matches) != 1:
+        raise ValueError(
+            "対象のつぶやきを特定できません。画面を再読み込みしてください。"
+        )
+    return matches[0]
+
+
+def edit_tweet(index, original_text, body, keep_images, new_image_lines, quote_id):
+    """つぶやきの中身を書き換える。件数は変わらないので、state.json の
+    timestamps と ids には手を触れない(投稿日時も通し番号もそのまま)。"""
+    tweets = generate.load_tweets()
+    state = generate.load_state()
+    if (len(state.get("timestamps", [])) != len(tweets)
+            or len(state.get("ids", [])) != len(tweets)):
+        raise ValueError(
+            "tweets.txt と state.json の件数が合いません。"
+            "先に generate.py を実行してください。"
+        )
+    index = locate_tweet(tweets, index, original_text)
+
+    body = body.strip()
+    if BLANK_LINE_RE.search(body):
+        raise ValueError(
+            "本文の中に空行は置けません(空行はつぶやきの区切りに使われます)。"
+        )
+    for line in body.split("\n"):
+        stripped = line.strip()
+        if (generate.IMAGE_LINE_RE.match(stripped)
+                or generate.QUOTE_LINE_RE.match(stripped)):
+            raise ValueError(
+                "本文に [img:...] や [rt:...] の行は書けません"
+                "(画像と引用はボタンで操作してください)。"
+            )
+
+    # 画像は、元のつぶやきに入っていたものだけ残せる
+    _, original_images = generate.split_images(original_text)
+    for img in keep_images:
+        if img not in original_images:
+            raise ValueError(f"元のつぶやきにない画像です: {img}")
+
+    lines = [body] if body else []
+    lines += [f"[img:{path}]" for path in keep_images] + new_image_lines
+    if quote_id is not None:
+        if quote_id not in state.get("ids", []):
+            raise ValueError("引用元のつぶやきが見つかりません。")
+        lines.append(f"[rt:{quote_id}]")
+    if not lines:
+        raise ValueError("本文も画像もない状態にはできません")
+
+    tweets[index] = "\n".join(lines)
+    generate.TWEET_FILE.write_text("\n\n".join(tweets) + "\n", encoding="utf-8")
+
+
 def delete_tweet(index, text):
     """tweets.txt と state.json から、同じ位置の本文と日時を取り除く。
 
@@ -597,14 +866,7 @@ def delete_tweet(index, text):
             "tweets.txt と state.json の件数が合いません。"
             "先に generate.py を実行してください。"
         )
-    if not (0 <= index < len(tweets)) or tweets[index] != text:
-        # 一覧を開いたあとに順番が変わっていた場合に備えて、本文で探し直す
-        matches = [i for i, t in enumerate(tweets) if t == text]
-        if len(matches) != 1:
-            raise ValueError(
-                "削除するつぶやきを特定できません。画面を再読み込みしてください。"
-            )
-        index = matches[0]
+    index = locate_tweet(tweets, index, text)
 
     removed = tweets.pop(index)
     timestamps.pop(index)
@@ -691,7 +953,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self._git("push")
 
     def do_POST(self):
-        if self.path not in ("/post", "/delete"):
+        if self.path not in ("/post", "/edit", "/delete"):
             self.send_response(404)
             self.end_headers()
             return
@@ -724,6 +986,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     if quote_id is not None
                     else "つぶやきを追加(webフォーム)"
                 )
+            elif self.path == "/edit":
+                index = data.get("index")
+                if not isinstance(index, int):
+                    raise ValueError("編集する位置が指定されていません")
+                quote_id = data.get("quote_id")
+                if quote_id is not None and not isinstance(quote_id, int):
+                    raise ValueError("引用元の指定が正しくありません")
+                keep_images = data.get("keep_images") or []
+                if not isinstance(keep_images, list):
+                    raise ValueError("残す画像の指定が正しくありません")
+                new_image_lines = save_images(data.get("new_images") or [])
+                edit_tweet(
+                    index,
+                    data.get("original_text", ""),
+                    data.get("body", ""),
+                    keep_images,
+                    new_image_lines,
+                    quote_id,
+                )
+                self._publish("つぶやきを編集(webフォーム)")
             else:
                 text = data.get("text", "")
                 index = data.get("index")
