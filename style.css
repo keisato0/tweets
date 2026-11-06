@@ -65,6 +65,13 @@ body {
   line-height: 1.2;
 }
 
+/* タイトルは最新の一覧へのリンクだが、見た目は文字のままにする
+   (ホバーしても下線は出さない) */
+.site-header h1 a {
+  color: inherit;
+  text-decoration: none;
+}
+
 .tweet-count {
   margin: 4px 0 0;
   font-size: 13px;

@@ -202,10 +202,11 @@ SEARCH_ROOT_TOKEN = "__ROOT__"
 
 def render_header_html(total, root):
     """青いトップバー(左にタイトルと総ツイート件数、右に検索ページへのリンク)。
+    タイトルは最新の一覧(index.html)へのリンクにする。
     root はトップへの相対パス。"""
     return f"""  <header class="site-header site-top">
     <div class="site-title">
-      <h1>{html.escape(SITE_TITLE)}</h1>
+      <h1><a href="{root}index.html">{html.escape(SITE_TITLE)}</a></h1>
       <p class="tweet-count">{total:,}件のツイート</p>
     </div>
     <a class="header-link" href="{root}search.html">検索</a>
