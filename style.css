@@ -163,6 +163,16 @@ body {
   text-decoration: underline;
 }
 
+/* 件数の数字を同じ幅の枠に右詰めで入れて、桁数が違う行でも "-" と、
+   そのうしろの「件目」や日付の位置が縦に揃うようにする。
+   枠の幅 --archive-no-width は generate.py が桁数に応じて与える */
+.archive-no {
+  display: inline-block;
+  min-width: var(--archive-no-width, 3ch);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 .pager {
   display: flex;
   justify-content: space-between;

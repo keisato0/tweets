@@ -358,6 +358,12 @@ def main():
     # 新しいページを上、一番古い 1-100件目を一番下に並べる。
     archive_links_html = ""
     if pages:
+        # 件数の桁数がそろっていなくても "-" の位置が行ごとに揃うように、
+        # 数字を入れる枠の幅を一番大きい桁数に合わせる(style.css が使う)
+        last_of = lambda i, pg: (i - 1) * PAGE_SIZE + len(pg)
+        no_width = max(
+            len(str(last_of(i, pg))) for i, pg in enumerate(pages, start=1)
+        )
         items = []
         for i, page_tweets in reversed(list(enumerate(pages, start=1))):
             first_no = (i - 1) * PAGE_SIZE + 1
@@ -366,11 +372,13 @@ def main():
             newest_date = format_date(page_tweets[0][1])
             items.append(
                 f'      <li><a href="archive/page{i}.html">'
-                f"{first_no} - {last_no}件目 "
+                f'<span class="archive-no">{first_no}</span> - '
+                f'<span class="archive-no">{last_no}</span>件目 '
                 f"({oldest_date} - {newest_date})</a></li>\n"
             )
         archive_links_html = (
-            '  <section class="archive-list">\n'
+            '  <section class="archive-list" '
+            f'style="--archive-no-width: {no_width}ch">\n'
             "    <h2>過去のつぶやき</h2>\n"
             "    <ul>\n" + "".join(items) + "    </ul>\n"
             "  </section>\n"
