@@ -53,6 +53,14 @@ URL_SCHEME_RE = re.compile(r"^https?://(?:www\.)?")
 # パスは images/ 直下の安全なファイル名に限定する。
 IMAGE_LINE_RE = re.compile(r"^\[img:(images/[A-Za-z0-9_-]+\.(?:jpg|jpeg|png|webp))\]$")
 
+# 引用(いわゆるリツイート)は、つぶやき内の独立した1行 "[rt:42]" で表す。
+# 数字は state.json の ids に入っている、つぶやきごとの通し番号。
+# 1つのつぶやきが引用できるのは1件までとする。
+QUOTE_LINE_RE = re.compile(r"^\[rt:(\d+)\]$")
+
+# 引用カードに出す本文の長さ。これを超えたら末尾を省略する
+QUOTE_BODY_MAX = 140
+
 
 def split_images(text):
     """つぶやき本文から画像行を取り除き、(本文, 画像パスのリスト) を返す。"""
@@ -65,6 +73,19 @@ def split_images(text):
         else:
             lines.append(line)
     return "\n".join(lines).strip("\n"), images
+
+
+def split_quote(text):
+    """つぶやき本文から引用行を取り除き、(本文, 引用元の番号 or None) を返す。"""
+    lines = []
+    quote_id = None
+    for line in text.split("\n"):
+        m = QUOTE_LINE_RE.match(line.strip())
+        if m and quote_id is None:
+            quote_id = int(m.group(1))
+        else:
+            lines.append(line)
+    return "\n".join(lines).strip("\n"), quote_id
 
 
 def shorten_url(url):
@@ -144,6 +165,34 @@ def sync_timestamps(tweets, state):
     return timestamps
 
 
+def sync_ids(tweets, state):
+    """つぶやきごとの通し番号。timestamps とまったく同じ位置対応で持ち、
+    一度振った番号は変わらない。引用([rt:N])の参照先として使う。"""
+    ids = state.get("ids", [])
+    # 末尾が削除された場合はそのまま切り詰める(残りの番号は維持)
+    if len(ids) > len(tweets):
+        ids = ids[: len(tweets)]
+    next_id = state.get("next_id")
+    if next_id is None:
+        next_id = (max(ids) + 1) if ids else 1
+    while len(ids) < len(tweets):
+        ids.append(next_id)
+        next_id += 1
+    state["ids"] = ids
+    state["next_id"] = next_id
+    return ids
+
+
+def tweet_location(i, total):
+    """古い順で i 番目のつぶやきが載るページ。サイト直下からの相対パスを返す。"""
+    j = total - 1 - i                 # 新しい順での位置
+    if j < LATEST_SIZE:
+        return "index.html"
+    older_count = total - LATEST_SIZE
+    pos = older_count - 1 - (j - LATEST_SIZE)   # アーカイブ内での古い順の位置
+    return f"archive/page{pos // PAGE_SIZE + 1}.html"
+
+
 # 曜日の表記(datetime.weekday() は月曜が0)
 WEEKDAY_LABELS = "月火水木金土日"
 
@@ -177,19 +226,60 @@ def render_images_html(images, base_path):
     return f'\n      <div class="tweet-images count-{min(len(images), 4)}">{items}</div>'
 
 
-def render_tweet_html(text, iso_str, icon_path, base_path=""):
+def render_quote_html(quote_id, quotes, base_path):
+    """引用カード。カード全体を引用元へのリンクにするため、中の本文はリンク化
+    せずそのまま出す(a要素の入れ子はHTMLとして成り立たないため)。"""
+    info = (quotes or {}).get(quote_id)
+    if info is None:
+        return (
+            '\n      <div class="quoted-tweet quoted-missing">'
+            "このつぶやきは削除されました</div>"
+        )
+    raw = info["body"]
+    if len(raw) > QUOTE_BODY_MAX:
+        raw = raw[:QUOTE_BODY_MAX] + "…"
+    body = html.escape(raw).replace("\n", "<br>")
+    body_html = f'<div class="quoted-body">{body}</div>' if raw else ""
+    images_html = ""
+    if info["images"]:
+        imgs = "".join(
+            f'<img src="{base_path}{img}" alt="" loading="lazy">'
+            for img in info["images"][:4]
+        )
+        images_html = f'<div class="quoted-images">{imgs}</div>'
+    return (
+        f'\n      <a class="quoted-tweet" '
+        f'href="{base_path}{info["loc"]}#t{quote_id}">'
+        f'<div class="quoted-header">'
+        f'<span class="quoted-handle">{html.escape(HANDLE)}</span>'
+        f'<span class="quoted-date">{info["date"]}</span></div>'
+        f"{body_html}{images_html}</a>"
+    )
+
+
+def render_tweet_html(
+    text, iso_str, icon_path, base_path="", tweet_id=None, quotes=None
+):
     text, images = split_images(text)
+    text, quote_id = split_quote(text)
     body = linkify(text).replace("\n", "<br>")
     body_html = f'\n      <div class="tweet-body">{body}</div>' if text else ""
     images_html = render_images_html(images, base_path)
+    quote_html = (
+        render_quote_html(quote_id, quotes, base_path)
+        if quote_id is not None
+        else ""
+    )
     date_label = format_datetime(iso_str)
-    return f"""    <article class="tweet">
+    # 引用カードから飛んでこられるように、つぶやきごとに目印を付ける
+    id_attr = f' id="t{tweet_id}"' if tweet_id is not None else ""
+    return f"""    <article class="tweet"{id_attr}>
       <div class="tweet-header">
         <img class="avatar" src="{icon_path}" alt="">
         <div class="tweet-names">
           <span class="handle">{html.escape(HANDLE)}</span>
         </div>
-      </div>{body_html}{images_html}
+      </div>{body_html}{images_html}{quote_html}
       <div class="tweet-date">{date_label}</div>
     </article>
 """
@@ -247,16 +337,23 @@ SEARCH_PAGE_HTML = f"""<!DOCTYPE html>
 """
 
 
-def build_search_index(newest_first):
-    """全ツイートの検索用データ(新しい順)。t は検索対象の本文、h は表示用HTML。"""
+def build_search_index(newest_first, quotes=None):
+    """全ツイートの検索用データ(新しい順)。t は検索対象の本文、h は表示用HTML。
+    引用元の本文は t に含めない(同じ言葉で2件ヒットするのを避けるため)。"""
     items = []
-    for text, ts in newest_first:
+    for text, ts, tweet_id in newest_first:
         body, _ = split_images(text)
+        body, _ = split_quote(body)
         items.append(
             {
                 "t": body,
                 "h": render_tweet_html(
-                    text, ts, SEARCH_ROOT_TOKEN + ICON_FILENAME, SEARCH_ROOT_TOKEN
+                    text,
+                    ts,
+                    SEARCH_ROOT_TOKEN + ICON_FILENAME,
+                    SEARCH_ROOT_TOKEN,
+                    tweet_id,
+                    quotes,
                 ).strip(),
             }
         )
@@ -288,7 +385,7 @@ PAGE_TEMPLATE = """<!DOCTYPE html>
 
 
 def build_page(
-    tweets_with_ts,
+    page_tweets,
     title,
     css_path,
     icon_path,
@@ -296,10 +393,11 @@ def build_page(
     header_html,
     nav_html="",
     base_path="",
+    quotes=None,
 ):
     tweets_html = "".join(
-        render_tweet_html(text, ts, icon_path, base_path)
-        for text, ts in tweets_with_ts
+        render_tweet_html(text, ts, icon_path, base_path, tweet_id, quotes)
+        for text, ts, tweet_id in page_tweets
     )
     return PAGE_TEMPLATE.format(
         title=html.escape(title),
@@ -316,10 +414,24 @@ def main():
     tweets = load_tweets()
     state = load_state()
     timestamps = sync_timestamps(tweets, state)
+    ids = sync_ids(tweets, state)
     save_state(state)
 
-    # 新しい順(最新が先頭)の (text, timestamp) タプル列
-    newest_first = list(zip(tweets, timestamps))[::-1]
+    # 引用カードを描くための対応表。番号から、引用元の本文・画像・日付と、
+    # それが載るページ(リンク先)を引けるようにしておく
+    quotes = {}
+    for i, (text, ts) in enumerate(zip(tweets, timestamps)):
+        body, images = split_images(text)
+        body, _ = split_quote(body)
+        quotes[ids[i]] = {
+            "body": body,
+            "images": images,
+            "date": format_date(ts),
+            "loc": tweet_location(i, len(tweets)),
+        }
+
+    # 新しい順(最新が先頭)の (text, timestamp, 通し番号) タプル列
+    newest_first = list(zip(tweets, timestamps, ids))[::-1]
 
     latest = newest_first[:LATEST_SIZE]
     older = newest_first[LATEST_SIZE:]
@@ -364,6 +476,7 @@ def main():
             header_html=render_header_html(len(tweets), "../"),
             nav_html=nav_html,
             base_path="../",
+            quotes=quotes,
         )
         (ARCHIVE_DIR / f"page{i}.html").write_text(page_html, encoding="utf-8")
 
@@ -390,7 +503,8 @@ def main():
         )
 
     index_tweets_html = "".join(
-        render_tweet_html(text, ts, ICON_FILENAME) for text, ts in latest
+        render_tweet_html(text, ts, ICON_FILENAME, "", tweet_id, quotes)
+        for text, ts, tweet_id in latest
     )
     index_html = f"""<!DOCTYPE html>
 <html lang="ja">
@@ -414,7 +528,7 @@ def main():
 
     (ROOT / "search.html").write_text(SEARCH_PAGE_HTML, encoding="utf-8")
     SEARCH_FILE.write_text(
-        json.dumps(build_search_index(newest_first), ensure_ascii=False,
+        json.dumps(build_search_index(newest_first, quotes), ensure_ascii=False,
                    separators=(",", ":")) + "\n",
         encoding="utf-8",
     )

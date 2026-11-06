@@ -61,14 +61,28 @@ PAGE = """<!doctype html>
   #status { margin-top:12px; font-size:14px; color:var(--sub); white-space:pre-wrap; }
   #status.error { color:#e0245e; }
 
-  /* 一覧。つぶやき1件ごとに、右上へ削除ボタンを重ねる */
+  /* 引用するつぶやきを選んでいるときに、投稿欄の上に出すプレビュー */
+  .quoting { display:flex; align-items:flex-start; gap:8px; margin-bottom:10px;
+           padding:8px 10px; border:1px solid var(--border); border-radius:12px;
+           background:#f5f8fa; font-size:14px; }
+  .quoting .label { color:var(--sub); font-size:13px; white-space:nowrap; }
+  .quoting .body { flex:1; min-width:0; overflow-wrap:anywhere; }
+  .quoting .cancel { border:none; background:transparent; color:var(--sub);
+           font-size:18px; line-height:1; padding:0 4px; cursor:pointer; }
+
+  /* 一覧。つぶやき1件ごとに、右上へ操作ボタンを重ねる */
   .tweet-row { position:relative; }
-  .tweet-row .del { position:absolute; top:10px; right:10px;
-           display:flex; align-items:center; justify-content:center;
-           width:32px; height:32px; padding:0; border:none; border-radius:50%;
-           background:transparent; color:var(--sub); cursor:pointer; }
+  .tweet-row .actions { position:absolute; top:10px; right:10px;
+           display:flex; align-items:center; gap:4px; }
+  .tweet-row .actions button { display:flex; align-items:center; justify-content:center;
+           height:32px; padding:0; border:none; background:transparent;
+           color:var(--sub); cursor:pointer; }
+  .tweet-row .actions button:disabled { opacity:0.4; cursor:default; }
+  .tweet-row .quote { width:32px; border-radius:50%; }
+  .tweet-row .quote:hover { background:#e8f5fd; color:var(--blue); }
+  .tweet-row .quote svg { width:18px; height:18px; fill:currentColor; }
+  .tweet-row .del { width:32px; border-radius:50%; }
   .tweet-row .del:hover { background:#fde8ef; color:#e0245e; }
-  .tweet-row .del:disabled { opacity:0.4; cursor:default; }
   .tweet-row .del svg { width:18px; height:18px; fill:currentColor; }
   #listStatus { padding:16px; font-size:14px; color:var(--sub); }
 </style>
@@ -83,6 +97,12 @@ PAGE = """<!doctype html>
   </header>
 
   <div class="compose">
+    <div class="quoting" id="quoting" hidden>
+      <span class="label">引用:</span>
+      <span class="body" id="quotingBody"></span>
+      <button class="cancel" id="quotingCancel" title="引用をやめる"
+              aria-label="引用をやめる">&times;</button>
+    </div>
     <textarea id="text" placeholder="いまどうしてる?" autofocus></textarea><br>
     <button id="postBtn" onclick="post()">投稿</button>
     <div id="status"></div>
@@ -93,12 +113,31 @@ PAGE = """<!doctype html>
 </div>
 
 <script>
+const RETWEET = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>';
 const TRASH = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 2h4v2H4V5h4l1-2zM6 9h12l-1 12H7L6 9zm3 2v8h2v-8H9zm4 0v8h2v-8h-2z"/></svg>';
 
 function setStatus(msg, isError) {
   const el = document.getElementById('status');
   el.className = isError ? 'error' : '';
   el.textContent = msg;
+}
+
+let quoting = null;   // {id, text} 引用するつぶやきを選んでいる間だけ入る
+
+function shorten(text, max) {
+  return text.length > max ? text.slice(0, max) + '…' : text;
+}
+
+function setQuoting(item) {
+  quoting = item ? {id: item.id, preview: item.preview} : null;
+  const box = document.getElementById('quoting');
+  if (quoting) {
+    document.getElementById('quotingBody').textContent = shorten(quoting.preview, 60);
+    box.hidden = false;
+    document.getElementById('text').focus();
+  } else {
+    box.hidden = true;
+  }
 }
 
 async function loadList() {
@@ -114,13 +153,27 @@ async function loadList() {
       const row = document.createElement('div');
       row.className = 'tweet-row';
       row.innerHTML = item.html;
-      const btn = document.createElement('button');
-      btn.className = 'del';
-      btn.title = '削除';
-      btn.setAttribute('aria-label', 'このつぶやきを削除');
-      btn.innerHTML = TRASH;
-      btn.addEventListener('click', () => del(item.index, item.text, btn));
-      row.appendChild(btn);
+
+      const actions = document.createElement('div');
+      actions.className = 'actions';
+
+      const quoteBtn = document.createElement('button');
+      quoteBtn.className = 'quote';
+      quoteBtn.innerHTML = RETWEET;
+      quoteBtn.title = 'このつぶやきを引用して書く';
+      quoteBtn.setAttribute('aria-label', 'このつぶやきを引用して書く');
+      quoteBtn.addEventListener('click', () => setQuoting(item));
+      actions.appendChild(quoteBtn);
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'del';
+      delBtn.title = '削除';
+      delBtn.setAttribute('aria-label', 'このつぶやきを削除');
+      delBtn.innerHTML = TRASH;
+      delBtn.addEventListener('click', () => del(item, delBtn));
+      actions.appendChild(delBtn);
+
+      row.appendChild(actions);
       list.appendChild(row);
     }
     listStatus.hidden = true;
@@ -130,16 +183,21 @@ async function loadList() {
   }
 }
 
-async function del(index, text, btn) {
-  const head = text.length > 40 ? text.slice(0, 40) + '…' : text;
-  if (!confirm('このつぶやきを削除します。元に戻せません。\\n\\n' + head)) { return; }
+async function del(item, btn) {
+  let msg = 'このつぶやきを削除します。元に戻せません。\\n\\n' + shorten(item.preview, 40);
+  if (item.quoted_by > 0) {
+    msg += '\\n\\nこのつぶやきは' + item.quoted_by +
+           '件から引用されています。引用側は「このつぶやきは削除されました」に変わります。';
+  }
+  if (!confirm(msg)) { return; }
+  if (quoting && quoting.id === item.id) { setQuoting(null); }
   btn.disabled = true;
   setStatus('削除中...');
   try {
     const res = await fetch('/delete', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({index, text})
+      body: JSON.stringify({index: item.index, text: item.text})
     });
     const data = await res.json();
     if (data.ok) {
@@ -166,12 +224,13 @@ async function post() {
     const res = await fetch('/post', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({text})
+      body: JSON.stringify({text, quote_id: quoting ? quoting.id : null})
     });
     const data = await res.json();
     if (data.ok) {
       setStatus('投稿しました。続けて次のツイートを書けます。');
       textEl.value = '';
+      setQuoting(null);
       textEl.focus();
       await loadList();
     } else {
@@ -186,6 +245,7 @@ async function post() {
 document.getElementById('text').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { post(); }
 });
+document.getElementById('quotingCancel').addEventListener('click', () => setQuoting(null));
 loadList();
 </script>
 </body>
@@ -211,33 +271,84 @@ def run_generate():
     )
 
 
-def load_tweets_with_timestamps():
-    """(本文, 投稿日時) の組を古い順に返す。日時がまだ割り当てられていない
-    つぶやきがある場合は、先に generate.py を実行して割り当てさせる。"""
+def load_tweets_with_meta():
+    """(本文, 投稿日時, 通し番号) の組を古い順に返す。日時や番号がまだ
+    割り当てられていないつぶやきがある場合は、先に generate.py を実行させる。"""
     tweets = generate.load_tweets()
-    timestamps = generate.load_state().get("timestamps", [])
-    if len(timestamps) < len(tweets):
+    state = generate.load_state()
+    if (
+        len(state.get("timestamps", [])) < len(tweets)
+        or len(state.get("ids", [])) < len(tweets)
+    ):
         run_generate()
         tweets = generate.load_tweets()
-        timestamps = generate.load_state().get("timestamps", [])
-    return list(zip(tweets, timestamps))
+        state = generate.load_state()
+    return list(zip(tweets, state["timestamps"], state["ids"]))
+
+
+def count_quotes(triples):
+    """番号ごとに、何件のつぶやきから引用されているかを数える。"""
+    counts = {}
+    for text, _ts, _tid in triples:
+        body, _ = generate.split_images(text)
+        _body, quote_id = generate.split_quote(body)
+        if quote_id is not None:
+            counts[quote_id] = counts.get(quote_id, 0) + 1
+    return counts
+
+
+def build_quote_index(triples):
+    """引用カードを描くための対応表。generate.py と同じ中身を作る。"""
+    total = len(triples)
+    quotes = {}
+    for i, (text, ts, tid) in enumerate(triples):
+        body, images = generate.split_images(text)
+        body, _ = generate.split_quote(body)
+        quotes[tid] = {
+            "body": body,
+            "images": images,
+            "date": generate.format_date(ts),
+            "loc": generate.tweet_location(i, total),
+        }
+    return quotes
 
 
 def list_payload():
     """一覧に出すデータ。新しいものが先頭。index は tweets.txt での位置
-    (古いものが0)で、削除のときにそのまま送り返す。"""
-    pairs = load_tweets_with_timestamps()
+    (古いものが0)で、削除のときにそのまま送り返す。id は引用に使う通し番号。"""
+    triples = load_tweets_with_meta()
+    quotes = build_quote_index(triples)
+    counts = count_quotes(triples)
     items = []
-    for i in range(len(pairs) - 1, -1, -1):
-        text, ts = pairs[i]
+    for i in range(len(triples) - 1, -1, -1):
+        text, ts, tid = triples[i]
+        body, _ = generate.split_images(text)
+        body, _ = generate.split_quote(body)
         items.append(
             {
                 "index": i,
+                "id": tid,
+                # text は tweets.txt の生のかたまり(削除時の照合に使う)、
+                # preview は画像行や引用行を除いた本文(画面に出す用)
                 "text": text,
-                "html": generate.render_tweet_html(text, ts, "/icon.jpg", "/"),
+                "preview": body,
+                "quoted_by": counts.get(tid, 0),
+                "html": generate.render_tweet_html(
+                    text, ts, "/icon.jpg", "/", tid, quotes
+                ),
             }
         )
     return {"ok": True, "items": items}
+
+
+def quote_marker(quote_id):
+    """引用元の番号を確かめて、本文の末尾に足す行を返す。"""
+    ids = generate.load_state().get("ids", [])
+    if quote_id not in ids:
+        raise ValueError("引用するつぶやきが見つかりません。画面を再読み込みしてください。")
+    # 空行をはさむと別のつぶやきとして分かれてしまうので、改行は1つにする
+    # (tweets.txt は空行区切りで1件ずつに分かれる)
+    return f"\n[rt:{quote_id}]"
 
 
 def delete_tweet(index, text):
@@ -367,8 +478,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 text = data.get("text", "").strip()
                 if not text:
                     raise ValueError("投稿内容が空です")
+                quote_id = data.get("quote_id")
+                if quote_id is not None:
+                    if not isinstance(quote_id, int):
+                        raise ValueError("引用元の指定が正しくありません")
+                    text += quote_marker(quote_id)
                 append_tweet(text)
-                self._publish("つぶやきを追加(webフォーム)")
+                self._publish(
+                    "つぶやきを引用して追加(webフォーム)"
+                    if quote_id is not None
+                    else "つぶやきを追加(webフォーム)"
+                )
             else:
                 text = data.get("text", "")
                 index = data.get("index")

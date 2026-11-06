@@ -87,6 +87,66 @@ body {
 .tweet {
   padding: 12px 16px;
   border-bottom: 1px solid var(--border);
+  /* 引用カードから飛んできたとき、固定されたトップバーの下に隠れないようにする */
+  scroll-margin-top: 90px;
+}
+
+/* 引用(リツイート)のカード。カード全体が引用元へのリンクになっている */
+.quoted-tweet {
+  display: block;
+  margin: 6px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.quoted-tweet:hover {
+  background: #f5f8fa;
+}
+
+.quoted-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.quoted-handle {
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.quoted-date {
+  color: var(--sub);
+  font-size: 13px;
+}
+
+.quoted-body {
+  font-size: 14px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.quoted-images {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.quoted-images img {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+/* 引用元が削除されていた場合 */
+.quoted-missing {
+  color: var(--sub);
+  font-size: 14px;
 }
 
 .tweet-header {
