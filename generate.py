@@ -27,7 +27,7 @@ SEARCH_FILE = ROOT / "search.json"
 ARCHIVE_DIR = ROOT / "archive"
 TZ = ZoneInfo("Asia/Tokyo")
 # index.html に並べる最新のつぶやきの件数
-LATEST_SIZE = 50
+LATEST_SIZE = 100
 # 「過去のつぶやき」を区切る単位。古いほうから100件ずつまとめるので、
 # 1-100件目のページは一度できたら以後変わらず、一番新しいページだけが増えていく
 PAGE_SIZE = 100
