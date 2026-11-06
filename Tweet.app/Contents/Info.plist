@@ -10,12 +10,10 @@
 	<string>applet</string>
 	<key>CFBundleIconFile</key>
 	<string>applet</string>
-	<key>CFBundleIconName</key>
-	<string>applet</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>ツイートを書く(ブラウザ版)</string>
+	<string>Tweet</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleSignature</key>
