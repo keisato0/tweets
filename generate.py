@@ -26,6 +26,10 @@ STATE_FILE = ROOT / "state.json"
 SEARCH_FILE = ROOT / "search.json"
 ARCHIVE_DIR = ROOT / "archive"
 TZ = ZoneInfo("Asia/Tokyo")
+# index.html に並べる最新のつぶやきの件数
+LATEST_SIZE = 50
+# 「過去のつぶやき」を区切る単位。古いほうから100件ずつまとめるので、
+# 1-100件目のページは一度できたら以後変わらず、一番新しいページだけが増えていく
 PAGE_SIZE = 100
 
 HANDLE = "@keisato0"
@@ -309,13 +313,17 @@ def main():
     # 新しい順(最新が先頭)の (text, timestamp) タプル列
     newest_first = list(zip(tweets, timestamps))[::-1]
 
-    latest = newest_first[:PAGE_SIZE]
-    older = newest_first[PAGE_SIZE:]
+    latest = newest_first[:LATEST_SIZE]
+    older = newest_first[LATEST_SIZE:]
 
+    # アーカイブは古いほうから100件ずつ区切る。pages[0] が一番古いページ
+    # (1-100件目)で、pages[-1] が一番新しい(件数が100未満になりうる)ページ。
+    # 各ページの中身は、サイト全体と同じく新しい順に並べる。
+    oldest_first = older[::-1]
     pages = []
     idx = 0
-    while idx < len(older):
-        pages.append(older[idx : idx + PAGE_SIZE])
+    while idx < len(oldest_first):
+        pages.append(oldest_first[idx : idx + PAGE_SIZE][::-1])
         idx += PAGE_SIZE
 
     if ARCHIVE_DIR.exists():
@@ -323,18 +331,16 @@ def main():
             f.unlink()
     ARCHIVE_DIR.mkdir(exist_ok=True)
 
-    # アーカイブページ本体を生成
+    # アーカイブページ本体を生成(page1 が一番古い 1-100件目)
     total_pages = len(pages)
-    for i, page_tweets in enumerate(pages, start=2):  # page2, page3, ...
-        first_no = PAGE_SIZE + (i - 2) * PAGE_SIZE + 1
+    for i, page_tweets in enumerate(pages, start=1):  # page1, page2, ...
+        first_no = (i - 1) * PAGE_SIZE + 1
         last_no = first_no + len(page_tweets) - 1
-        prev_link = (
-            f'../index.html' if i == 2 else f'page{i - 1}.html'
-        )
-        next_link = f"page{i + 1}.html" if i - 2 < total_pages - 1 else None
-        nav_parts = [f'<a href="{prev_link}">&laquo; 新しいつぶやき</a>']
-        if next_link:
-            nav_parts.append(f'<a href="{next_link}">古いつぶやき &raquo;</a>')
+        newer_link = "../index.html" if i == total_pages else f"page{i + 1}.html"
+        older_link = f"page{i - 1}.html" if i > 1 else None
+        nav_parts = [f'<a href="{newer_link}">&laquo; 新しいつぶやき</a>']
+        if older_link:
+            nav_parts.append(f'<a href="{older_link}">古いつぶやき &raquo;</a>')
         nav_html = f'  <nav class="pager">{"".join(nav_parts)}</nav>\n'
         page_html = build_page(
             page_tweets,
@@ -348,12 +354,13 @@ def main():
         )
         (ARCHIVE_DIR / f"page{i}.html").write_text(page_html, encoding="utf-8")
 
-    # index.html 用: 最新100件のあとにアーカイブリンク一覧
+    # index.html 用: 最新のつぶやきのあとにアーカイブリンク一覧。
+    # 新しいページを上、一番古い 1-100件目を一番下に並べる。
     archive_links_html = ""
     if pages:
         items = []
-        for i, page_tweets in enumerate(pages, start=2):
-            first_no = PAGE_SIZE + (i - 2) * PAGE_SIZE + 1
+        for i, page_tweets in reversed(list(enumerate(pages, start=1))):
+            first_no = (i - 1) * PAGE_SIZE + 1
             last_no = first_no + len(page_tweets) - 1
             oldest_date = format_date(page_tweets[-1][1])
             newest_date = format_date(page_tweets[0][1])
