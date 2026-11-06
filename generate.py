@@ -153,6 +153,13 @@ def format_date(iso_str):
     return f"{dt.year}年{dt.month}月{dt.day}日"
 
 
+def render_archive_date(iso_str):
+    """アーカイブ一覧に出す日付。月と日は0埋めの2桁にそろえて、行をまたいで
+    日付の "-" や閉じ括弧の位置が揃うようにする。"""
+    dt = datetime.fromisoformat(iso_str)
+    return f"{dt.year}年{dt.month:02d}月{dt.day:02d}日"
+
+
 def format_datetime(iso_str):
     dt = datetime.fromisoformat(iso_str)
     weekday = WEEKDAY_LABELS[dt.weekday()]
@@ -358,8 +365,8 @@ def main():
     # 新しいページを上、一番古い 1-100件目を一番下に並べる。
     archive_links_html = ""
     if pages:
-        # 件数の桁数がそろっていなくても "-" の位置が行ごとに揃うように、
-        # 数字を入れる枠の幅を一番大きい桁数に合わせる(style.css が使う)
+        # 件数は0埋めして桁数をそろえ、行をまたいで "-" や「件目」の位置を
+        # 揃える。幅は一番大きい件数(= アーカイブの総件数)の桁数に合わせる
         last_of = lambda i, pg: (i - 1) * PAGE_SIZE + len(pg)
         no_width = max(
             len(str(last_of(i, pg))) for i, pg in enumerate(pages, start=1)
@@ -368,17 +375,15 @@ def main():
         for i, page_tweets in reversed(list(enumerate(pages, start=1))):
             first_no = (i - 1) * PAGE_SIZE + 1
             last_no = first_no + len(page_tweets) - 1
-            oldest_date = format_date(page_tweets[-1][1])
-            newest_date = format_date(page_tweets[0][1])
+            oldest_date = render_archive_date(page_tweets[-1][1])
+            newest_date = render_archive_date(page_tweets[0][1])
             items.append(
                 f'      <li><a href="archive/page{i}.html">'
-                f'<span class="archive-no">{first_no}</span> - '
-                f'<span class="archive-no">{last_no}</span>件目 '
+                f"{first_no:0{no_width}d} - {last_no:0{no_width}d}件目 "
                 f"({oldest_date} - {newest_date})</a></li>\n"
             )
         archive_links_html = (
-            '  <section class="archive-list" '
-            f'style="--archive-no-width: {no_width}ch">\n'
+            '  <section class="archive-list">\n'
             "    <h2>過去のつぶやき</h2>\n"
             "    <ul>\n" + "".join(items) + "    </ul>\n"
             "  </section>\n"

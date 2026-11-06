@@ -157,20 +157,13 @@ body {
   color: var(--blue);
   text-decoration: none;
   font-size: 14px;
+  /* generate.py が件数と日付を0埋めで桁数そろえて書き出すので、あとは
+     数字を同じ幅で描けば、行をまたいで "-" や括弧の位置が揃う */
+  font-variant-numeric: tabular-nums;
 }
 
 .archive-list a:hover {
   text-decoration: underline;
-}
-
-/* 件数の数字を同じ幅の枠に右詰めで入れて、桁数が違う行でも "-" と、
-   そのうしろの「件目」や日付の位置が縦に揃うようにする。
-   枠の幅 --archive-no-width は generate.py が桁数に応じて与える */
-.archive-no {
-  display: inline-block;
-  min-width: var(--archive-no-width, 3ch);
-  text-align: right;
-  font-variant-numeric: tabular-nums;
 }
 
 .pager {
