@@ -13,6 +13,7 @@
     この画面はローカルからしか開けない。公開されるサイトには削除ボタンは
     付かない。
 """
+import base64
 import http.server
 import json
 import re
@@ -70,6 +71,24 @@ PAGE = """<!doctype html>
   .quoting .cancel { border:none; background:transparent; color:var(--sub);
            font-size:18px; line-height:1; padding:0 4px; cursor:pointer; }
 
+  /* 添付画像。web版(post.html)と同じ見た目・同じ処理にそろえる */
+  .compose-actions { display:flex; align-items:center; gap:12px; margin-top:12px; }
+  .compose-actions button { margin-top:0; }
+  label.attach { color:var(--blue); font-size:15px; cursor:pointer; padding:8px 4px; }
+  label.attach.disabled { opacity:0.4; cursor:default; }
+  #fileInput { display:none; }
+  #previews { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+  #previews:empty { display:none; }
+  .preview { position:relative; width:80px; height:80px; }
+  .preview img { width:80px; height:80px; object-fit:cover; border-radius:8px;
+           border:1px solid var(--border); }
+  .preview .remove { position:absolute; top:2px; right:2px; margin:0; padding:0;
+           width:22px; height:22px; border:none; border-radius:50%;
+           background:rgba(0,0,0,0.6); color:#fff; font-size:14px; line-height:22px;
+           font-weight:bold; cursor:pointer; }
+  .preview .size { position:absolute; left:4px; bottom:4px; font-size:10px; color:#fff;
+           background:rgba(0,0,0,0.6); border-radius:4px; padding:0 3px; }
+
   /* 一覧。つぶやき1件ごとに、右上へ操作ボタンを重ねる */
   .tweet-row { position:relative; }
   .tweet-row .actions { position:absolute; top:10px; right:10px;
@@ -103,8 +122,14 @@ PAGE = """<!doctype html>
       <button class="cancel" id="quotingCancel" title="引用をやめる"
               aria-label="引用をやめる">&times;</button>
     </div>
-    <textarea id="text" placeholder="いまどうしてる?" autofocus></textarea><br>
-    <button id="postBtn" onclick="post()">投稿</button>
+    <textarea id="text" placeholder="いまどうしてる?" autofocus></textarea>
+    <div id="previews"></div>
+    <div class="compose-actions">
+      <button id="postBtn" onclick="post()">投稿</button>
+      <label class="attach" id="attachLabel">画像を追加
+        <input type="file" id="fileInput" accept="image/*" multiple>
+      </label>
+    </div>
     <div id="status"></div>
   </div>
 
@@ -213,23 +238,197 @@ async function del(item, btn) {
   }
 }
 
+// ---- 添付画像の処理 ----
+// web版(post.html)とまったく同じ手順にしてある。選ばれた画像は、大きさに
+// かかわらず必ずcanvasに描き直してJPEGとして書き出す。これで長辺が
+// MAX_EDGE以下に縮み、元ファイルのEXIF(GPS位置情報・撮影日時・機種名など)は
+// 引き継がれない。さらに書き出したJPEGからJFIF以外のメタデータ領域を取り除き、
+// 残っていないことを確かめてからでないとサーバーに送らない。
+
+const MAX_IMAGES = 4;
+const MAX_EDGE = 1600;        // 長辺の最大ピクセル数
+const JPEG_QUALITY = 0.85;
+
+let attachments = [];         // { blob, url }
+
+async function decodeImage(file) {
+  // imageOrientation: 'from-image' で、写真の向き(EXIF Orientation)を
+  // ピクセルに反映した状態で読み込む(縦向き写真が横倒しにならない)
+  if (window.createImageBitmap) {
+    try {
+      return await createImageBitmap(file, { imageOrientation: 'from-image' });
+    } catch (e) { /* 下のフォールバックへ */ }
+  }
+  const url = URL.createObjectURL(file);
+  try {
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    return img;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+async function processImage(file) {
+  const src = await decodeImage(file);
+  const w0 = src.width, h0 = src.height;
+  const scale = Math.min(1, MAX_EDGE / Math.max(w0, h0));
+  const w = Math.max(1, Math.round(w0 * scale));
+  const h = Math.max(1, Math.round(h0 * scale));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff';   // 透過PNGの透明部分は白にする(JPEGは透過できない)
+  ctx.fillRect(0, 0, w, h);
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(src, 0, 0, w, h);
+  if (src.close) src.close();
+
+  const blob = await new Promise((resolve, reject) =>
+    canvas.toBlob(b => b ? resolve(b) : reject(new Error('JPEGへの変換に失敗しました')),
+                  'image/jpeg', JPEG_QUALITY));
+  const bytes = stripJpegMetadata(new Uint8Array(await blob.arrayBuffer()));
+  assertNoMetadata(bytes);
+  return new Blob([bytes], { type: 'image/jpeg' });
+}
+
+// JPEGのSOSより前にあるAPP1〜APP15(EXIF, XMP, ICC, IPTCなど)と
+// COM(コメント)セグメントを取り除く。APP0(JFIF)と画像データは残す。
+function stripJpegMetadata(b) {
+  if (b[0] !== 0xFF || b[1] !== 0xD8) throw new Error('JPEGではありません');
+  const out = [b.subarray(0, 2)];
+  let i = 2;
+  while (i < b.length) {
+    if (b[i] !== 0xFF) throw new Error('JPEGの構造が不正です');
+    const marker = b[i + 1];
+    if (marker === 0xFF) { i++; continue; }
+    if (marker === 0xDA) { out.push(b.subarray(i)); break; }
+    const len = (b[i + 2] << 8) | b[i + 3];
+    const seg = b.subarray(i, i + 2 + len);
+    const isMeta = (marker >= 0xE1 && marker <= 0xEF) || marker === 0xFE;
+    if (!isMeta) out.push(seg);
+    i += 2 + len;
+  }
+  const total = out.reduce((n, a) => n + a.length, 0);
+  const res = new Uint8Array(total);
+  let off = 0;
+  for (const a of out) { res.set(a, off); off += a.length; }
+  return res;
+}
+
+// 取り除いた結果にメタデータ領域が残っていないことを確かめる
+function assertNoMetadata(b) {
+  let i = 2;
+  while (i < b.length) {
+    const marker = b[i + 1];
+    if (marker === 0xDA) return;
+    if ((marker >= 0xE1 && marker <= 0xEF) || marker === 0xFE) {
+      throw new Error('画像のメタデータを削除できませんでした。この画像は投稿できません。');
+    }
+    i += 2 + ((b[i + 2] << 8) | b[i + 3]);
+  }
+}
+
+function imageFileName(n) {
+  const d = new Date();
+  const p = x => String(x).padStart(2, '0');
+  const stamp = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-` +
+                `${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+  const rand = Math.random().toString(36).slice(2, 8);
+  return `images/${stamp}-${n + 1}-${rand}.jpg`;
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result.split(',')[1]);
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(blob);
+  });
+}
+
+function renderPreviews() {
+  const box = document.getElementById('previews');
+  box.innerHTML = '';
+  attachments.forEach((a, idx) => {
+    const d = document.createElement('div');
+    d.className = 'preview';
+    const img = document.createElement('img');
+    img.src = a.url;
+    const size = document.createElement('span');
+    size.className = 'size';
+    size.textContent = Math.round(a.blob.size / 1024) + 'KB';
+    const rm = document.createElement('button');
+    rm.className = 'remove';
+    rm.textContent = '×';
+    rm.title = 'この画像を外す';
+    rm.onclick = () => {
+      URL.revokeObjectURL(a.url);
+      attachments.splice(idx, 1);
+      renderPreviews();
+    };
+    d.append(img, size, rm);
+    box.appendChild(d);
+  });
+  const full = attachments.length >= MAX_IMAGES;
+  document.getElementById('fileInput').disabled = full;
+  document.getElementById('attachLabel').classList.toggle('disabled', full);
+}
+
+function clearAttachments() {
+  attachments.forEach(a => URL.revokeObjectURL(a.url));
+  attachments = [];
+  renderPreviews();
+}
+
+async function onFilesSelected(e) {
+  const files = Array.from(e.target.files || []);
+  e.target.value = '';
+  const room = MAX_IMAGES - attachments.length;
+  if (files.length > room) {
+    setStatus(`画像は${MAX_IMAGES}枚までです。`, true);
+  }
+  for (const file of files.slice(0, room)) {
+    setStatus('画像を処理中...');
+    try {
+      const blob = await processImage(file);
+      attachments.push({ blob, url: URL.createObjectURL(blob) });
+      setStatus('');
+    } catch (err) {
+      setStatus('画像を読み込めませんでした: ' + (err.message || err), true);
+    }
+  }
+  renderPreviews();
+}
+
 async function post() {
   const textEl = document.getElementById('text');
   const text = textEl.value;
-  if (!text.trim()) { return; }
+  if (!text.trim() && attachments.length === 0) { return; }
   const btn = document.getElementById('postBtn');
   btn.disabled = true;
   setStatus('投稿中...');
   try {
+    const images = [];
+    for (let i = 0; i < attachments.length; i++) {
+      images.push({
+        name: imageFileName(i),
+        data: await blobToBase64(attachments[i].blob)
+      });
+    }
     const res = await fetch('/post', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({text, quote_id: quoting ? quoting.id : null})
+      body: JSON.stringify({text, images, quote_id: quoting ? quoting.id : null})
     });
     const data = await res.json();
     if (data.ok) {
       setStatus('投稿しました。続けて次のツイートを書けます。');
       textEl.value = '';
+      clearAttachments();
       setQuoting(null);
       textEl.focus();
       await loadList();
@@ -246,11 +445,44 @@ document.getElementById('text').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { post(); }
 });
 document.getElementById('quotingCancel').addEventListener('click', () => setQuoting(null));
+document.getElementById('fileInput').addEventListener('change', onFilesSelected);
 loadList();
 </script>
 </body>
 </html>
 """
+
+
+# 添付画像として受け取れるファイル名。画面側が付ける名前の形に限定して、
+# images/ の外に書き出されることがないようにする
+IMAGE_NAME_RE = re.compile(r"^images/[A-Za-z0-9_-]+\.jpg$")
+MAX_IMAGES = 4
+MAX_IMAGE_BYTES = 10 * 1024 * 1024
+
+
+def save_images(images):
+    """画面から届いた画像を images/ に書き出し、本文に足す行を返す。
+    画像はブラウザ側でJPEGに変換され、メタデータも除かれている。"""
+    if not images:
+        return []
+    if len(images) > MAX_IMAGES:
+        raise ValueError(f"画像は{MAX_IMAGES}枚までです")
+    (ROOT / "images").mkdir(exist_ok=True)
+    lines = []
+    for item in images:
+        name = item.get("name", "")
+        if not IMAGE_NAME_RE.match(name):
+            raise ValueError(f"画像のファイル名が不正です: {name}")
+        raw = base64.b64decode(item.get("data", ""), validate=True)
+        if not raw:
+            raise ValueError("画像が空です")
+        if len(raw) > MAX_IMAGE_BYTES:
+            raise ValueError("画像が大きすぎます")
+        if raw[:2] != b"\xff\xd8":
+            raise ValueError("JPEGではありません")
+        (ROOT / name).write_bytes(raw)
+        lines.append(f"[img:{name}]")
+    return lines
 
 
 def append_tweet(text):
@@ -476,8 +708,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
             if self.path == "/post":
                 text = data.get("text", "").strip()
-                if not text:
+                image_lines = save_images(data.get("images") or [])
+                if not text and not image_lines:
                     raise ValueError("投稿内容が空です")
+                # 本文のあとに画像の行を並べる(web版と同じ並び)
+                text = "\n".join([text] + image_lines).strip("\n")
                 quote_id = data.get("quote_id")
                 if quote_id is not None:
                     if not isinstance(quote_id, int):
