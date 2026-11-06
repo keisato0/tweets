@@ -333,6 +333,11 @@ def main():
         pages.append(oldest_first[idx : idx + PAGE_SIZE][::-1])
         idx += PAGE_SIZE
 
+    # 件数は0埋めして桁数をそろえる。一覧で行をまたいで "-" や「件目」の
+    # 位置を揃えるためで、ページの見出しも同じ表記にする。桁数は一番大きい
+    # 件数、つまりアーカイブの総件数に合わせる
+    no_width = len(str(len(older))) if older else 1
+
     if ARCHIVE_DIR.exists():
         for f in ARCHIVE_DIR.glob("page*.html"):
             f.unlink()
@@ -351,7 +356,7 @@ def main():
         nav_html = f'  <nav class="pager">{"".join(nav_parts)}</nav>\n'
         page_html = build_page(
             page_tweets,
-            title=f"{SITE_TITLE} ({first_no} - {last_no}件目)",
+            title=f"{SITE_TITLE} ({first_no:0{no_width}d} - {last_no:0{no_width}d}件目)",
             css_path="../style.css",
             icon_path=f"../{ICON_FILENAME}",
             index_path="../index.html",
@@ -365,12 +370,6 @@ def main():
     # 新しいページを上、一番古い 1-100件目を一番下に並べる。
     archive_links_html = ""
     if pages:
-        # 件数は0埋めして桁数をそろえ、行をまたいで "-" や「件目」の位置を
-        # 揃える。幅は一番大きい件数(= アーカイブの総件数)の桁数に合わせる
-        last_of = lambda i, pg: (i - 1) * PAGE_SIZE + len(pg)
-        no_width = max(
-            len(str(last_of(i, pg))) for i, pg in enumerate(pages, start=1)
-        )
         items = []
         for i, page_tweets in reversed(list(enumerate(pages, start=1))):
             first_no = (i - 1) * PAGE_SIZE + 1
