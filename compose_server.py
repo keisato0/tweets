@@ -45,7 +45,7 @@ PAGE = """<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>つぶやきの投稿と削除</title>
+<title>つぶやき</title>
 <link rel="stylesheet" href="/style.css">
 <link rel="icon" href="/icon.jpg">
 <style>
