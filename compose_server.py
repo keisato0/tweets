@@ -8,7 +8,8 @@
     追記され、下の一覧では各つぶやきの削除ができる。投稿でも削除でも
     git pull → tweets.txt の更新 → サイト生成 → commit・push まで自動で行う
     (スマホ編集などでリモートが進んでいても自動的に取り込んでからコミット
-    する)。しばらく操作がない場合はタイムアウトでサーバーが自動終了する。
+    する)。一覧を出すときも先に git pull して、スマホからの投稿を反映する。
+    しばらく操作がない場合はタイムアウトでサーバーが自動終了する。
 
     この画面はローカルからしか開けない。公開されるサイトには削除ボタンは
     付かない。
@@ -27,6 +28,8 @@ import generate
 PORT = 8765
 ROOT = Path(__file__).resolve().parent
 IDLE_TIMEOUT_SEC = 15 * 60
+# 一覧を開くときの git pull を待つ上限(秒)。超えたらローカルの内容で一覧を出す
+PULL_TIMEOUT_SEC = 10
 
 # サイト本体のCSSと画像をこのサーバーからも配れるようにする
 # (一覧を公開サイトと同じ見た目で表示するため)
@@ -931,6 +934,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return
         if self.path == "/tweets":
             try:
+                # スマホPWAの投稿はGitHubに直接コミットされるため、
+                # 一覧を作る前に取り込んでおく。オフラインなどで失敗しても
+                # 一覧はローカルの内容で出す
+                try:
+                    self._git("pull", "--no-rebase", timeout=PULL_TIMEOUT_SEC)
+                except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+                    pass
                 self._send_json(list_payload())
             except Exception as e:
                 self._send_json({"ok": False, "error": str(e)}, status=500)
@@ -940,9 +950,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_response(404)
         self.end_headers()
 
-    def _git(self, *args):
+    def _git(self, *args, timeout=None):
         subprocess.run(
-            ["git", *args], cwd=ROOT, check=True, capture_output=True, text=True
+            ["git", *args],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
         )
 
     def _publish(self, message):
