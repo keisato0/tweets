@@ -130,6 +130,9 @@ PAGE = """<!doctype html>
   .tweet-row .del:hover { background:#fde8ef; color:#e0245e; }
   .tweet-row .del svg { width:18px; height:18px; fill:currentColor; }
   #listStatus { padding:16px; font-size:14px; color:var(--sub); }
+  /* 引用カードから飛んできた引用元を、しばらく色付けして目立たせる */
+  .tweet-row.jumped { animation:jumped 2s ease-out; }
+  @keyframes jumped { from { background:#e8f5fd; } to { background:transparent; } }
 </style>
 </head>
 <body>
@@ -651,6 +654,24 @@ document.getElementById('text').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { post(); }
 });
 document.getElementById('quotingCancel').addEventListener('click', () => setQuoting(null));
+// 一覧の引用カードは公開サイトのページ(/index.html#t42 など)へのリンクだが、
+// このサーバーはそのページを配信していない。一覧の中の引用元の行へ移動させる
+document.getElementById('list').addEventListener('click', (e) => {
+  const card = e.target.closest('a.quoted-tweet');
+  if (!card) { return; }
+  e.preventDefault();
+  const hash = new URL(card.href).hash;
+  const target = hash ? document.getElementById(hash.slice(1)) : null;
+  const row = target ? target.closest('.tweet-row') : null;
+  if (!row) {
+    setStatus('引用元のつぶやきが一覧に見つかりません。', true);
+    return;
+  }
+  row.scrollIntoView({behavior: 'smooth', block: 'center'});
+  row.classList.remove('jumped');
+  void row.offsetWidth;   // 同じ行へ続けて飛んだときも色付けをやり直す
+  row.classList.add('jumped');
+});
 document.getElementById('fileInput').addEventListener('change', onFilesSelected);
 loadList();
 </script>
