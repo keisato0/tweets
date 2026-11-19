@@ -858,13 +858,15 @@ def edit_tweet(index, original_text, body, keep_images, new_image_lines, quote_i
 def delete_tweet(index, text):
     """tweets.txt と state.json から、同じ位置の本文と日時を取り除く。
 
-    state.json の日時はつぶやきの順番と1対1で対応している。本文だけを消すと
-    generate.py が末尾の日時を切り捨てるため、それ以降の日付がすべてずれる。
-    必ず両方から同じ位置を取り除くこと。"""
+    state.json の日時と通し番号はつぶやきの順番と1対1で対応している。本文だけを
+    消すと generate.py が末尾の日時と番号を切り捨てるため、それ以降の日付と番号が
+    すべてずれる(番号がずれると引用カードが別のつぶやきを指してしまう)。
+    必ず3つすべてから同じ位置を取り除くこと。"""
     tweets = generate.load_tweets()
     state = generate.load_state()
     timestamps = state.get("timestamps", [])
-    if len(timestamps) != len(tweets):
+    ids = state.get("ids", [])
+    if len(timestamps) != len(tweets) or len(ids) != len(tweets):
         raise ValueError(
             "tweets.txt と state.json の件数が合いません。"
             "先に generate.py を実行してください。"
@@ -873,10 +875,12 @@ def delete_tweet(index, text):
 
     removed = tweets.pop(index)
     timestamps.pop(index)
+    ids.pop(index)
     generate.TWEET_FILE.write_text(
         ("\n\n".join(tweets) + "\n") if tweets else "", encoding="utf-8"
     )
     state["timestamps"] = timestamps
+    state["ids"] = ids
     generate.save_state(state)
     return removed
 
