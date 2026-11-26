@@ -130,6 +130,11 @@ PAGE = """<!doctype html>
   .tweet-row .del:hover { background:#fde8ef; color:#e0245e; }
   .tweet-row .del svg { width:18px; height:18px; fill:currentColor; }
   #listStatus { padding:16px; font-size:14px; color:var(--sub); }
+  /* 過去ツイートは、リンクを押したときだけ投稿欄の下に開く */
+  .history-toggle { padding:12px 16px; border-bottom:1px solid var(--border);
+           font-size:14px; }
+  .history-toggle a { color:var(--blue); text-decoration:none; }
+  .history-toggle a:hover { text-decoration:underline; }
   /* 引用カードから飛んできた引用元を、しばらく色付けして目立たせる */
   .tweet-row.jumped { animation:jumped 2s ease-out; }
   @keyframes jumped { from { background:#e8f5fd; } to { background:transparent; } }
@@ -162,8 +167,13 @@ PAGE = """<!doctype html>
     <div id="status"></div>
   </div>
 
-  <div id="listStatus">読み込み中...</div>
-  <main class="timeline" id="list"></main>
+  <div class="history-toggle">
+    <a href="#" id="historyLink">過去ツイート表示</a>
+  </div>
+  <div id="history" hidden>
+    <div id="listStatus">読み込み中...</div>
+    <main class="timeline" id="list"></main>
+  </div>
 </div>
 
 <script>
@@ -411,9 +421,11 @@ async function loadList() {
     list.innerHTML = '';
     for (const item of data.items) { list.appendChild(buildRow(item)); }
     listStatus.hidden = true;
+    return true;
   } catch (e) {
     listStatus.hidden = false;
     listStatus.textContent = '一覧を読み込めませんでした: ' + e;
+    return false;
   }
 }
 
@@ -640,7 +652,7 @@ async function post() {
       clearAttachments();
       setQuoting(null);
       textEl.focus();
-      await loadList();
+      if (historyLoaded) { await loadList(); }
     } else {
       setStatus('エラー: ' + data.error, true);
     }
@@ -673,7 +685,22 @@ document.getElementById('list').addEventListener('click', (e) => {
   row.classList.add('jumped');
 });
 document.getElementById('fileInput').addEventListener('change', onFilesSelected);
-loadList();
+
+// 過去ツイートは最初は隠しておき、リンクを押したときに初めて読み込む
+// (読み込みのたびに git pull が走るため、投稿だけのときは待たせない)
+let historyLoaded = false;
+document.getElementById('historyLink').addEventListener('click', async (e) => {
+  e.preventDefault();
+  const box = document.getElementById('history');
+  const link = e.currentTarget;
+  box.hidden = !box.hidden;
+  link.textContent = box.hidden ? '過去ツイート表示' : '過去ツイートを隠す';
+  if (!box.hidden && !historyLoaded) {
+    historyLoaded = true;
+    // 読み込めなかったときは、次に開いたときにもう一度試す
+    historyLoaded = await loadList();
+  }
+});
 </script>
 </body>
 </html>
